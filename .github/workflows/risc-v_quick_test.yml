@@ -1,0 +1,56 @@
+name: PPL<risc-v> Build && Quick Test
+
+on:
+  #push:
+  #  branches: [ master ]
+  #  paths-ignore: ['.**', 'docker/**', 'docs/**', 'samples/**', README.md]
+  pull_request:
+    branches: [ master ]
+    paths-ignore: ['.**', 'docker/**', 'docs/**', 'samples/**', README.md]
+  workflow_dispatch:
+
+jobs:
+  build_and_test:
+    runs-on: [self-hosted, dispatch]
+
+    steps:
+      - name: Create Checkout Directory
+        run: |
+          echo "Create Checkout Directory: ${{ github.run_id }}."
+          [ -z "${{ github.run_id }}" ] || rm -rf ${{ github.run_id }}
+          mkdir ${{ github.run_id }}
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          path: ${{ github.run_id }}
+
+      #- name: Copy pplnn code to Servers
+      #  run: |
+      #    cd ../../ && ./copy_pplnn_to_servers.sh ${{ github.run_id }}
+      - name: Test pplnn on Servers
+        run: |
+          #jenkins_runid="100"
+          #echo "jenkin runid: $jenkins_runid"
+          #echo '::set-output name=jenkins_runnumber::$jenkins_runid'
+          #echo '::set-output name=jenkins_runnumber2::${jenkins_runid}'
+          #echo '::set-output name=jenkins_runnumber3::103'
+          cd ../../ && ./test_pplnn_on_servers.sh ${{ github.run_id }} ${{ github.actor }} 'risc-v'
+        id: testing
+      
+      - name: ifcancelled
+        if: ${{ cancelled() }}
+        run: |
+          echo "workflow is cancelled."
+          
+      - name: test
+        run: |
+          echo "step test."
+          
+      - name: clean
+        if: ${{ always() }}
+        run: |
+          cd ../../ && ./stop_running_jobs.sh ${{ github.run_id }}
+          #echo "jenkin runid: ${{ steps.testing.outputs.jenkins_runnumber }}"
+          #echo "jenkin runid2: ${{ steps.testing.outputs.jenkins_runnumber2 }}"
+          #echo "jenkin runid3: ${{ steps.testing.outputs.jenkins_runnumber3 }}"
+          echo "clean up."
