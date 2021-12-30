@@ -34,7 +34,7 @@ jobs:
           #echo '::set-output name=jenkins_runnumber::$jenkins_runid'
           #echo '::set-output name=jenkins_runnumber2::${jenkins_runid}'
           #echo '::set-output name=jenkins_runnumber3::103'
-          cd ../../ && ./test_pplnn_on_servers.sh ${{ github.run_id }} ${{ github.actor }} 'risc-v'
+          cd ../../ && ./test_pplnn_on_servers.sh ${{ github.run_id }} ${{ github.actor }}
         id: testing
       
       - name: ifcancelled
