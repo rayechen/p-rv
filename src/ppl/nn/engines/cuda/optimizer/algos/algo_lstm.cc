@@ -24,30 +24,16 @@
 #include "ppl/nn/common/logger.h"
 #include "ppl/nn/utils/utils.h"
 
-//#include "cudakernel/gemm/gemm.h"
 using namespace ppl::common;
-using namespace ppl::nn::common;
 
 namespace ppl { namespace nn { namespace cuda {
 
-void LstmAlgorithm::DeleteAttrParam(void*& param) {
-    delete (LSTMParam*)param;
-    return;
-}
-
-void LstmAlgorithm::GetAttrParam(void*& param) const {
-    if (param == nullptr) {
-        param = new LSTMParam();
-    }
-    *(LSTMParam*)param = attr_param_;
-    return;
-}
-
 double LstmAlgorithm::ExcuteTimer(const ir::Node* node, OptKernelOptions& options) {
-return 0.f;
+    options.compile_set->emplace(node->GetId());
+    return 1e-5f;
 }
 
-RetCode LstmAlgorithm::ModifyParam(const ir::Node* node, OptKernelOptions& options) {
+RetCode LstmAlgorithm::ModifyParam(ir::Node* node, OptKernelOptions& options) {
     return RC_SUCCESS;
 }
 
@@ -58,7 +44,7 @@ void LstmAlgorithm::ReshapeOnEdges(const ir::Node* node, std::map<edgeid_t, std:
         if (edge_id == INVALID_EDGEID) {
             continue;
         }
-        auto shape = &tensors->find(edge_id)->second->GetShape();
+        auto shape = tensors->find(edge_id)->second->GetShape();
         if (shape->GetDimCount() > 1) {
             shape->SetDataFormat(input_format);
         } else {
@@ -68,7 +54,7 @@ void LstmAlgorithm::ReshapeOnEdges(const ir::Node* node, std::map<edgeid_t, std:
 
     for (uint32_t i = 0; i < node->GetOutputCount(); ++i) {
         auto edge_id = node->GetOutput(i);
-        auto shape = &tensors->find(edge_id)->second->GetShape();
+        auto shape = tensors->find(edge_id)->second->GetShape();
         shape->SetDataFormat(output_format);
     }
     return;

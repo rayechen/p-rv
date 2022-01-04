@@ -27,9 +27,9 @@ using namespace ppl::nn::common;
 namespace ppl { namespace nn { namespace cuda {
 
 RetCode IfOp::Init(const OptKernelOptions& options) {
-    infer_dims_func_ = [this](InputOutputInfo* info) -> RetCode {
+    infer_dims_func_ = [](InputOutputInfo* info) -> RetCode {
         for (uint32_t i = 0; i < info->GetOutputCount(); ++i) {
-            auto out_shape = &info->GetOutput<TensorImpl>(i)->GetShape();
+            auto out_shape = info->GetOutput<TensorImpl>(i)->GetShape();
             if (out_shape->GetDataFormat() == DATAFORMAT_UNKNOWN) {
                 out_shape->Reshape({1, 3, 128, 128});
                 out_shape->SetDataFormat(DATAFORMAT_NDARRAY);
@@ -38,9 +38,9 @@ RetCode IfOp::Init(const OptKernelOptions& options) {
         return RC_SUCCESS;
     };
 
-    infer_type_func_ = [this](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t) -> RetCode {
+    infer_type_func_ = [](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t) -> RetCode {
         for (uint32_t i = 0; i < info->GetOutputCount(); ++i) {
-            auto out_shape = &info->GetOutput<TensorImpl>(i)->GetShape();
+            auto out_shape = info->GetOutput<TensorImpl>(i)->GetShape();
             out_shape->SetDataType(DATATYPE_UNKNOWN);
         }
         return RC_SUCCESS;

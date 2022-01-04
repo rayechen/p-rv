@@ -105,13 +105,6 @@ ppl::common::RetCode Run();
 Runs the model with given inputs. Input data MUST be filled via the returned value of `GetInputTensor()` before calling this function.
 
 ```c++
-ppl::common::RetCode Sync();
-```
-
-Blocks current CPU thread until all operations are finished. Note that this function MUST be called before getting outputs or profiling statistics, in case some engine may run asynchronously.
-
-
-```c++
 uint32_t GetOutputCount() const;
 ```
 
@@ -123,6 +116,18 @@ Tensor* GetOutputTensor(uint32_t idx) const;
 ```
 
 Gets the output tensor at position `idx`. Note that `idx` should be less than the number of outputs.
+
+```c++
+uint32_t GetDeviceContextCount() const;
+```
+
+Gets the number of `DeviceContext` used by this `Runtime` instance.
+
+```c++
+DeviceContext* GetDeviceContext(uint32_t idx) const;
+```
+
+Gets the `DeviceContext` at position `idx`. Note that `idx` should be less than `GetDeviceContextCount()`.
 
 ```c++
 ppl::common::RetCode GetProfilingStatistics(ProfilingStatistics*) const;
@@ -174,6 +179,12 @@ ppl::common::RetCode ConvertFromHost(const void* src, const ppl::common::TensorS
 ```
 
 Converts data to inner buffer from `src` with the shape `src_desc`. Note that inner buffer MUST be allocated before calling this function.
+
+```c++
+DeviceContext* GetDeviceContext() const;
+```
+
+Gets context of the underlying `Device`.
 
 ```c++
 void SetBufferPtr(void* buf);

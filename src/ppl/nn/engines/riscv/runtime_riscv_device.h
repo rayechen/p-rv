@@ -26,21 +26,27 @@
 
 namespace ppl { namespace nn { namespace riscv {
 
-class RuntimeRISCVDevice final : public RISCVDevice {
+static void DummyDeleter(ppl::common::Allocator*) {}
+
+class RuntimeRiscvDevice final : public RiscvDevice {
 private:
     static inline uint64_t Align(uint64_t x, uint64_t n) {
         return (x + n - 1) & (~(n - 1));
     }
 
 public:
-    RuntimeRISCVDevice(uint64_t alignment) : RISCVDevice(alignment) {
-        buffer_manager_.reset(new utils::CompactBufferManager(GetAllocator()));
+    RuntimeRiscvDevice(uint64_t alignment) : RiscvDevice(alignment) {
+        auto allocator_ptr = RiscvDevice::GetAllocator();
+        allocator_ = std::shared_ptr<ppl::common::Allocator>(allocator_ptr, DummyDeleter);
+        buffer_manager_.reset(new utils::StackBufferManager(allocator_ptr));
     }
 
-    ~RuntimeRISCVDevice() {
+    ~RuntimeRiscvDevice() {
         LOG(DEBUG) << "buffer manager[" << buffer_manager_->GetName() << "] allocates ["
                    << buffer_manager_->GetAllocatedBytes() << "] bytes.";
-        buffer_manager_->Free(&shared_tmp_buffer_);
+        if (tmp_buffer_size_) {
+            buffer_manager_->Free(&shared_tmp_buffer_);
+        }
         buffer_manager_.reset();
     }
 
@@ -73,6 +79,7 @@ private:
     std::unique_ptr<utils::BufferManager> buffer_manager_;
     BufferDesc shared_tmp_buffer_;
     uint64_t tmp_buffer_size_ = 0;
+    std::shared_ptr<ppl::common::Allocator> allocator_;
 };
 
 }}} // namespace ppl::nn::riscv

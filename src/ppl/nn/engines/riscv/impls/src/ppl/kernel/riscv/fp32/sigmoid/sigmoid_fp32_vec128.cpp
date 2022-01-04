@@ -22,8 +22,7 @@
 
 namespace ppl { namespace kernel { namespace riscv {
 
-static inline float32xm1_t _vector128_sigmoid(const float32xm1_t var, const unsigned int vl)
-{
+static inline float32xm1_t _vector128_sigmoid(const float32xm1_t var, const uint64_t vl) {
     float32xm1_t value = var;
     value = vfmaxvf_float32xm1(value, -18.0f, vl);
     value = vfminvf_float32xm1(value, 18.0f, vl);
@@ -57,19 +56,15 @@ static inline float32xm1_t _vector128_sigmoid(const float32xm1_t var, const unsi
     return dst;
 }
 
-ppl::common::RetCode sigmoid_fp32_vec128(
-    const ppl::nn::TensorShape *x_shape,
-    const float *x,
-    float *y)
-{
+ppl::common::RetCode sigmoid_fp32_vec128(const ppl::nn::TensorShape* x_shape, const float* x, float* y) {
     const auto vl = vsetvli(4, RVV_E32, RVV_M1);
     const int64_t n_elem = x_shape->GetElementsIncludingPadding();
 
     int64_t i = 0;
     for (; i <= n_elem - 16; i += 16) {
-        vsev_float32xm1(y + i + 0 , _vector128_sigmoid(vlev_float32xm1(x + i + 0 , vl), vl), vl);
-        vsev_float32xm1(y + i + 4 , _vector128_sigmoid(vlev_float32xm1(x + i + 4 , vl), vl), vl);
-        vsev_float32xm1(y + i + 8 , _vector128_sigmoid(vlev_float32xm1(x + i + 8 , vl), vl), vl);
+        vsev_float32xm1(y + i + 0, _vector128_sigmoid(vlev_float32xm1(x + i + 0, vl), vl), vl);
+        vsev_float32xm1(y + i + 4, _vector128_sigmoid(vlev_float32xm1(x + i + 4, vl), vl), vl);
+        vsev_float32xm1(y + i + 8, _vector128_sigmoid(vlev_float32xm1(x + i + 8, vl), vl), vl);
         vsev_float32xm1(y + i + 12, _vector128_sigmoid(vlev_float32xm1(x + i + 12, vl), vl), vl);
     }
     for (; i < n_elem - 4; i += 1) {

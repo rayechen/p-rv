@@ -19,6 +19,12 @@
 
 #include "ppl/nn/params/onnx/leaky_relu_param.h"
 #include "ppl/nn/common/logger.h"
+#include "rapidjson/document.h"
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/writer.h"
+
+#include <fstream>
+#include <sstream>
 
 using namespace ppl::common;
 using namespace ppl::nn::common;
@@ -39,6 +45,19 @@ int GetRelueType(const std::string& name) {
     return -1;
 }
 
+#define GetPadSize(pad_size, type){ \
+    pad_size = 0; \
+    if (type == DATATYPE_FLOAT32) { \
+            pad_size = 4; \
+    } else if (type == DATATYPE_FLOAT16) { \
+            pad_size = 8; \
+    } else if (type == DATATYPE_INT8) { \
+            pad_size = 16; \
+    } \
+}
+
+#define Align(x, y) ( ((x)+(y)-1) / (y) * (y) )
+
 RetCode ConvertToForwardConvParam(const TensorShape& shape_in0, const TensorShape& shape_in1,
                                   const TensorShape& shape_out, ConvolutionParam normal_param,
                                   conv_param_t& conv_param) {
@@ -48,8 +67,15 @@ RetCode ConvertToForwardConvParam(const TensorShape& shape_in0, const TensorShap
     conv_param.num_grp = normal_param.group;
     conv_param.num_chl = shape_in1.GetDim(1) * normal_param.group;
     conv_param.num_flt = shape_in1.GetDim(0);
-    conv_param.num_chl_pad = (conv_param.num_chl + 7) / 8 * 8;
-    conv_param.num_flt_pad = (conv_param.num_flt + 7) / 8 * 8;
+    unsigned int in_pad_size;
+    unsigned int flt_pad_size;
+    GetPadSize(in_pad_size, shape_in0.GetDataType());
+    GetPadSize(flt_pad_size, shape_in1.GetDataType());
+    //conv_param.num_chl_pad = (conv_param.num_chl + 7) / 8 * 8;
+    //conv_param.num_flt_pad = (conv_param.num_flt + 7) / 8 * 8;
+    //std::cout << "in pad size: " << in_pad_size << " flt_pad_size: " << flt_pad_size << std::endl;
+    conv_param.num_chl_pad = Align(conv_param.num_chl, in_pad_size);
+    conv_param.num_flt_pad = Align(conv_param.num_flt, flt_pad_size);
     conv_param.flt_height = shape_in1.GetDim(2);
     conv_param.flt_width = shape_in1.GetDim(3);
     conv_param.out_height = shape_out.GetDim(2);
@@ -63,23 +89,13 @@ RetCode ConvertToForwardConvParam(const TensorShape& shape_in0, const TensorShap
     conv_param.has_bias = normal_param.bias_term;
     return RC_SUCCESS;
 }
-
-RetCode ConvertToEmptyFuseParam(fuse_param_t& fuse_param) {
-    fuse_param.has_activation = 0;
-    fuse_param.has_clip = false;
-    fuse_param.has_prelu = false;
-    fuse_param.has_elt = false;
-    fuse_param.has_elt_activation = 0;
-    fuse_param.has_elt_clip = false;
-    fuse_param.has_elt_prelu = 0;
-    fuse_param.has_concat = false;
-    return RC_SUCCESS;
-}
+#undef GetPadSize
+#undef Align
 
 RetCode ConvertToPrelu(uint32_t fuse_index, InputOutputInfo* info, CudaDevice* device, ConvFusionInfo fuse_info,
                        fuse_param_t& fuse_param) {
     uint32_t prelu_input = fuse_info.input_ind[fuse_index];
-    auto shape = info->GetInput<TensorImpl>(prelu_input)->GetShape();
+    const TensorShape& shape = *info->GetInput<TensorImpl>(prelu_input)->GetShape();
 
     if (fuse_index == 0) {
         fuse_param.has_prelu = shape.IsScalar() ? 1 : 2;
@@ -111,7 +127,6 @@ RetCode ConvertToForwardFuseParam(InputOutputInfo* info, CudaDevice* device, Con
     int fuse_index = 0;
     int fuse_size = fuse_info.types.size();
 
-    ConvertToEmptyFuseParam(fuse_param);
     RetCode status;
     ClipParam* param;
 
@@ -192,13 +207,57 @@ RetCode ConvertToForwardFuseParam(InputOutputInfo* info, CudaDevice* device, Con
     }
 
     fuse_param.has_concat = fuse_info.channel_offset >= 0;
-    if (fuse_param.has_concat) { // TODO Xusi fix this
+    if (fuse_param.has_concat) {
         fuse_param.concat_offset = fuse_info.channel_offset;
         fuse_param.concat_stride = fuse_info.channel_size;
         fuse_param.post_concat = info->GetOutput<TensorImpl>(0)->GetBufferPtr();
     }
 
     return RC_SUCCESS;
+}
+
+void LoadAlgoInfo(const std::string& file_path, const algo_param_t& algo_param, const std::string& key_str) {
+    if (!file_path.empty()) {
+        rapidjson::Document oWriteDoc;
+        fstream ifile;
+        ifile.open(file_path, ios_base::in);
+        if (!ifile.is_open()) {
+            oWriteDoc.SetObject();
+        } else {
+            std::stringstream algo_info_json_buffer;
+            algo_info_json_buffer << ifile.rdbuf();
+            oWriteDoc.Parse(algo_info_json_buffer.str().c_str());
+            if (oWriteDoc.HasParseError()) {
+                oWriteDoc.SetObject();
+            }
+        }
+        ifile.close();
+
+        std::string kname_str = algo_param.algo_name;
+
+        rapidjson::Document::AllocatorType& allocator = oWriteDoc.GetAllocator();
+        rapidjson::Value object(rapidjson::kObjectType);
+        rapidjson::Value key_info(key_str.c_str(), key_str.size(), allocator);
+        rapidjson::Value kname_info(kname_str.c_str(), kname_str.size(), allocator);
+        object.AddMember("kid", algo_param.kid, allocator);
+        object.AddMember("kname", kname_info, allocator);
+        object.AddMember("splitk", algo_param.splitk, allocator);
+        object.AddMember("splitf", algo_param.splitf, allocator);
+        oWriteDoc.RemoveMember(key_info);
+        oWriteDoc.AddMember(key_info, object, allocator);
+        rapidjson::StringBuffer oBuffer;
+        rapidjson::Writer<rapidjson::StringBuffer> oWriter(oBuffer);
+        oWriteDoc.Accept(oWriter);
+
+        fstream ofile;
+        ofile.open(file_path, ios_base::out);
+        if (!ofile.is_open()) {
+            return;
+        }
+        ofile << oBuffer.GetString();
+        ofile.close();
+    }
+    return;
 }
 
 }}} // namespace ppl::nn::cuda

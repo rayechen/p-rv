@@ -18,69 +18,23 @@
 #ifndef _ST_HPC_PPL_NN_ENGINES_RISCV_UTILS_DATA_TRANS_H_
 #define _ST_HPC_PPL_NN_ENGINES_RISCV_UTILS_DATA_TRANS_H_
 
-void N8cxToNdarrayFp16(
-    const __fp16 *src,
-    int n,
-    int c,
-    int h,
-    int w,
-    __fp16 *dst);
+#include <cstdint>
 
-void NdarrayToN8cxFp16(
-    const __fp16 *src,
-    int n,
-    int c,
-    int h,
-    int w,
-    __fp16 *dst);
+void N8cxToNdarrayFp16(const __fp16* src, int64_t n, int64_t c, int64_t h, int64_t w, __fp16* dst);
 
-void N8cxToNdarrayFp32(
-    const float *src,
-    int n,
-    int c,
-    int h,
-    int w,
-    float *dst);
+void NdarrayToN8cxFp16(const __fp16* src, int64_t n, int64_t c, int64_t h, int64_t w, __fp16* dst);
 
-void N4cxToNdarrayFp32(
-    const float *src,
-    int n,
-    int c,
-    int h,
-    int w,
-    float *dst);
+void N8cxToNdarrayFp32(const float* src, int64_t n, int64_t c, int64_t h, int64_t w, float* dst);
 
-void NdarrayToN4cxFp32(
-    const float *src,
-    int n,
-    int c,
-    int h,
-    int w,
-    float *dst);
+void N4cxToNdarrayFp32(const float* src, int64_t n, int64_t c, int64_t h, int64_t w, float* dst);
 
-void NdarrayToN8cxFp32(
-    const float *src,
-    int n,
-    int c,
-    int h,
-    int w,
-    float *dst);
+void NdarrayToN4cxFp32(const float* src, int64_t n, int64_t c, int64_t h, int64_t w, float* dst);
+
+void NdarrayToN8cxFp32(const float* src, int64_t n, int64_t c, int64_t h, int64_t w, float* dst);
 
 // TODO Optimize
-void N8cxFp16ToNdarrayFp32(
-    const __fp16 *src,
-    int n,
-    int c,
-    int h,
-    int w,
-    float *dst);
+void N8cxFp16ToNdarrayFp32(const __fp16* src, int64_t n, int64_t c, int64_t h, int64_t w, float* dst);
 
 // TODO Optimize
-void NdarrayFp32ToN8cxFp16(
-    const float *src,
-    int n,
-    int c,
-    int h,
-    int w,
-    __fp16 *dst);
+void NdarrayFp32ToN8cxFp16(const float* src, int64_t n, int64_t c, int64_t h, int64_t w, __fp16* dst);
 #endif

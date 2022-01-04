@@ -30,7 +30,7 @@ bool ConcatKernel::CanDoExecute(const KernelExecContext& ctx) const {
         if (!tensor) {
             return false;
         }
-        if (tensor->GetShape().GetBytesIncludingPadding() != 0) {
+        if (tensor->GetShape()->GetBytesIncludingPadding() != 0) {
             all_empty = false;
         }
     }
@@ -45,25 +45,29 @@ ppl::common::RetCode ConcatKernel::DoExecute(KernelExecContext* ctx) {
     src_list_.resize(ctx->GetInputCount());
     src_shape_list_.resize(ctx->GetInputCount());
 
-    auto concat_result = ctx->GetOutput<TensorImpl>(0);
+    PPLNN_X86_REQUIRED_OUTPUT(concat_result, 0);
 
     PPLNN_X86_DEBUG_TRACE("Op: %s\n", GetName().c_str());
+
     for (uint32_t i = 0; i < ctx->GetInputCount(); ++i) {
         auto input = ctx->GetInput<TensorImpl>(i);
         PPLNN_X86_DEBUG_TRACE("Input [inputs[%u]]:\n", i);
         PPL_X86_TENSOR_PRINT_DEBUG_MSG(input);
-        src_shape_list_[i] = &input->GetShape();
+        src_shape_list_[i] = input->GetShape();
         src_list_[i] = input->GetBufferPtr();
     }
-    PPLNN_X86_DEBUG_TRACE("Output [concat_result]:\n");
-    PPL_X86_TENSOR_PRINT_DEBUG_MSG(concat_result);
+
     PPLNN_X86_DEBUG_TRACE("axis: %d\n", param_->axis);
     PPLNN_X86_DEBUG_TRACE("isa: %u\n", GetISA());
 
-    auto data_type = concat_result->GetShape().GetDataType();
-    auto data_format = concat_result->GetShape().GetDataFormat();
+    PPLNN_X86_REALLOC_TENSOR_BUFFER(concat_result);
+    PPLNN_X86_DEBUG_TRACE("Output [concat_result]:\n");
+    PPL_X86_TENSOR_PRINT_DEBUG_MSG(concat_result);
+
+    auto data_type = concat_result->GetShape()->GetDataType();
+    auto data_format = concat_result->GetShape()->GetDataFormat();
     const int32_t real_axis =
-        param_->axis < 0 ? param_->axis + ctx->GetInput<TensorImpl>(0)->GetShape().GetDimCount() : param_->axis;
+        param_->axis < 0 ? param_->axis + ctx->GetInput<TensorImpl>(0)->GetShape()->GetDimCount() : param_->axis;
 
     if (ppl::common::GetSizeOfDataType(data_type) == 4 && data_format == ppl::common::DATAFORMAT_N16CX &&
         real_axis == 1 && MayUseISA(ppl::common::ISA_X86_AVX)) {

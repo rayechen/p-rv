@@ -34,6 +34,10 @@ include(FetchContent)
 set(FETCHCONTENT_BASE_DIR ${HPCC_DEPS_DIR})
 set(FETCHCONTENT_QUIET OFF)
 
+if(PPLNN_HOLD_DEPS)
+    set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
+endif()
+
 # --------------------------------------------------------------------------- #
 
 find_package(Git QUIET)
@@ -43,11 +47,10 @@ endif()
 
 FetchContent_Declare(hpcc
     GIT_REPOSITORY https://github.com/openppl-public/hpcc.git
-    GIT_TAG 97b154551d2cac09fa4558cb933f6372c4da83dc
+    GIT_TAG 4ac9367ff6b2af7ad8adc4fb7ba1c0fa27793ae0
     SOURCE_DIR ${HPCC_DEPS_DIR}/hpcc
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/hpcc-build
-    SUBBUILD_DIR ${HPCC_DEPS_DIR}/hpcc-subbuild
-    UPDATE_DISCONNECTED True)
+    SUBBUILD_DIR ${HPCC_DEPS_DIR}/hpcc-subbuild)
 
 FetchContent_GetProperties(hpcc)
 if(NOT hpcc_POPULATED)
@@ -57,22 +60,23 @@ endif()
 
 # --------------------------------------------------------------------------- #
 
-set(PPLCOMMON_BUILD_TESTS OFF CACHE BOOL "disable ppl.common tests")
-set(PPLCOMMON_BUILD_BENCHMARK OFF CACHE BOOL "disable ppl.common benchmark")
+set(PPLCOMMON_BUILD_TESTS OFF CACHE BOOL "disable pplcommon tests")
+set(PPLCOMMON_BUILD_BENCHMARK OFF CACHE BOOL "disable pplcommon benchmark")
 set(PPLCOMMON_ENABLE_PYTHON_API ${PPLNN_ENABLE_PYTHON_API})
 set(PPLCOMMON_ENABLE_LUA_API ${PPLNN_ENABLE_LUA_API})
+set(PPLCOMMON_HOLD_DEPS ${PPLNN_HOLD_DEPS})
 
-hpcc_declare_git_dep(ppl.common
+hpcc_declare_git_dep(pplcommon
     https://github.com/openppl-public/ppl.common.git
-    afd0d6c90accbeb3e73fedd7b6c983e906546f7e)
+    83dd9e3b091d7fad0106d12d68c1bb38977ede5d)
 
 # --------------------------------------------------------------------------- #
 
 set(protobuf_BUILD_TESTS OFF CACHE BOOL "disable protobuf tests")
 
 hpcc_declare_pkg_dep(protobuf
-    https://github.com/protocolbuffers/protobuf/archive/refs/tags/v3.12.4.zip
-    35baf103b2bbc166502c2e431d9d543b)
+    https://github.com/protocolbuffers/protobuf/releases/download/v3.12.4/protobuf-cpp-3.12.4.zip
+    41651ed9f6cd35063f57003ff24bacfb)
 
 # --------------------------------------------------------------------------- #
 
@@ -92,16 +96,16 @@ set(PYBIND11_NOPYTHON ON CACHE BOOL "do not find python")
 set(PYBIND11_FINDPYTHON OFF CACHE BOOL "do not find python")
 
 hpcc_declare_pkg_dep(pybind11
-    https://github.com/pybind/pybind11/archive/refs/tags/v2.7.0.zip
-    267807f790ef598ef912a79aceefdc10)
+    https://github.com/pybind/pybind11/archive/refs/tags/v2.7.1.zip
+    cc6d9f0c21694e7c4ec4a00f077de61b)
 
 # --------------------------------------------------------------------------- #
 
 set(LUACPP_INSTALL OFF CACHE BOOL "")
 
 hpcc_declare_pkg_dep(luacpp
-    https://github.com/ouonline/lua-cpp/archive/6e9327be6594e54facba750178b13d86bf1a71fb.zip
-    818e2f7890eb3fe92c7026d9bb4394b2)
+    https://github.com/ouonline/lua-cpp/archive/6074d360820af5f1459f39b1a731b788be0643a0.zip
+    401fdb315bfb3863f789afdd1296084d)
 
 # --------------------------------------------------------------------------- #
 

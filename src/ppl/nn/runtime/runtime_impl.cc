@@ -35,20 +35,21 @@ RuntimeImpl::~RuntimeImpl() {
     engctx_.clear();
 }
 
-static EngineContext* FindOrCreateEngineContext(const string& graph_name, EngineImpl* engine,
-                                                map<EngineImpl*, EngineContext*>* eng2ctx,
+static EngineContext* FindOrCreateEngineContext(EngineImpl* engine, map<EngineImpl*, EngineContext*>* eng2ctx,
                                                 vector<unique_ptr<EngineContext>>* engctx) {
     auto ref = eng2ctx->find(engine);
     if (ref != eng2ctx->end()) {
         return ref->second;
     }
 
-    auto ctx = engine->CreateEngineContext(graph_name);
-    if (ctx) {
-        engctx->emplace_back(unique_ptr<EngineContext>(ctx));
-        eng2ctx->insert(make_pair(engine, ctx));
+    auto ctx = engine->CreateEngineContext();
+    if (!ctx) {
+        LOG(ERROR) << "create EngineContext for engine[" << engine->GetName() << "] failed.";
+        return nullptr;
     }
 
+    eng2ctx->insert(make_pair(engine, ctx));
+    engctx->emplace_back(unique_ptr<EngineContext>(ctx));
     return ctx;
 }
 
@@ -57,21 +58,23 @@ static RetCode InitRuntimeGraphKernels(const ir::GraphTopo* topo, const RuntimeG
     graph->nodeid2kernel.resize(topo->GetMaxNodeId());
 
     map<EngineImpl*, EngineContext*> eng2ctx;
-    for (auto it = info.kernels.begin(); it != info.kernels.end(); ++it) {
-        auto ctx = FindOrCreateEngineContext(topo->GetName(), it->engine, &eng2ctx, engctx);
+    for (auto partition = info.partitions.begin(); partition != info.partitions.end(); ++partition) {
+        auto ctx = FindOrCreateEngineContext(partition->engine, &eng2ctx, engctx);
         if (!ctx) {
-            LOG(ERROR) << "create context of engine[" << it->engine->GetName() << "] failed.";
+            LOG(ERROR) << "create EngineContext for engine[" << partition->engine->GetName() << "] failed.";
             return RC_OTHER_ERROR;
         }
 
-        auto impl = it->op->CreateKernelImpl();
-        if (!impl) {
-            LOG(ERROR) << "create kernel[" << it->op->GetNode()->GetName() << "] failed.";
-            return RC_OTHER_ERROR;
+        auto dev = ctx->GetDevice();
+        for (auto o = partition->ops.begin(); o != partition->ops.end(); ++o) {
+            auto impl = (*o)->CreateKernelImpl();
+            if (!impl) {
+                LOG(ERROR) << "create kernel[" << (*o)->GetNode()->GetName() << "] failed.";
+                return RC_OTHER_ERROR;
+            }
+            impl->SetDevice(dev);
+            graph->nodeid2kernel[(*o)->GetNode()->GetId()].reset(impl);
         }
-
-        impl->SetDevice(ctx->GetDevice());
-        graph->nodeid2kernel[it->op->GetNode()->GetId()].reset(impl);
     }
 
     return RC_SUCCESS;
@@ -87,43 +90,37 @@ static KernelImpl* FindKernelByName(const vector<unique_ptr<KernelImpl>>& kernel
     return nullptr;
 }
 
-static RetCode InitRuntimeGraphInputs(const ir::GraphTopo* topo, const RuntimeGraphInfo& info,
-                                      utils::GenericCpuDevice* cpu_device, RuntimeGraph* graph) {
+static RetCode InitRuntimeGraphInputs(const ir::GraphTopo* topo, const RuntimeGraphInfo& info, RuntimeGraph* graph) {
     graph->inputs.reserve(topo->GetInputCount());
 
     for (uint32_t i = 0; i < topo->GetInputCount(); ++i) {
         auto eid = topo->GetInput(i);
         auto edge = topo->GetEdgeById(eid);
-
         auto ret_pair = graph->tensors.insert(make_pair(eid, TensorImpl(edge, TENSORTYPE_RESERVED)));
         auto tensor = &ret_pair.first->second;
 
         if (ret_pair.second) {
-            auto consumer_iter = edge->CreateConsumerIter();
-            if (!consumer_iter.IsValid()) {
-                // some edges may be used only by graph itself, e.g. `cond` of Loop
-                tensor->SetDevice(cpu_device);
-            } else {
-                for (; consumer_iter.IsValid(); consumer_iter.Forward()) {
-                    auto consumer = topo->GetNodeById(consumer_iter.Get());
-                    if (utils::IsPplConverterNode(consumer)) {
-                        continue;
-                    }
-
-                    auto kernel = FindKernelByName(graph->nodeid2kernel, consumer->GetName());
-                    if (!kernel) {
-                        LOG(ERROR) << "cannot find consumer[" << consumer->GetName() << "] of [" << edge->GetName()
-                                   << "]";
-                        return RC_NOT_FOUND;
-                    }
-                    tensor->SetDevice(kernel->GetDevice());
+            // finds a consumer to get device for this input
+            for (auto it = edge->CreateConsumerIter(); it.IsValid(); it.Forward()) {
+                auto consumer = topo->GetNodeById(it.Get());
+                if (utils::IsPplConverterNode(consumer)) {
+                    continue;
                 }
+
+                // Consumers of an edge are in the same engine. This is guranteed by optimizer.
+                auto kernel = FindKernelByName(graph->nodeid2kernel, consumer->GetName());
+                if (!kernel) {
+                    LOG(ERROR) << "cannot find consumer[" << consumer->GetName() << "] of [" << edge->GetName() << "]";
+                    return RC_NOT_FOUND;
+                }
+                tensor->SetDevice(kernel->GetDevice());
+                break;
             }
 
             // ONNX supports reshaping inputs in runtime stage
             auto shape_ref = info.shapes.find(edge->GetId());
             if (shape_ref != info.shapes.end()) {
-                tensor->GetShape() = shape_ref->second;
+                *tensor->GetShape() = shape_ref->second;
             }
         }
 
@@ -140,28 +137,30 @@ static RetCode InitRuntimeGraphExtraInputs(const ir::GraphTopo* topo, const Runt
     for (uint32_t i = 0; i < topo->GetExtraInputCount(); ++i) {
         auto eid = topo->GetExtraInput(i);
         auto edge = topo->GetEdgeById(eid);
-
         auto ret_pair = graph->tensors.insert(make_pair(eid, TensorImpl(edge, TENSORTYPE_RESERVED)));
         auto tensor = &ret_pair.first->second;
 
         if (ret_pair.second) {
+            // finds a consumer to get device for this extra input
             for (auto it = edge->CreateConsumerIter(); it.IsValid(); it.Forward()) {
                 auto consumer = topo->GetNodeById(it.Get());
                 if (utils::IsPplConverterNode(consumer)) {
                     continue;
                 }
 
+                // Consumers of an edge are in the same engine. This is guranteed by optimizer.
                 auto kernel = FindKernelByName(graph->nodeid2kernel, consumer->GetName());
                 if (!kernel) {
                     LOG(ERROR) << "cannot find consumer[" << consumer->GetName() << "] of [" << edge->GetName() << "]";
                     return RC_NOT_FOUND;
                 }
                 tensor->SetDevice(kernel->GetDevice());
+                break;
             }
 
             auto shape_ref = info.shapes.find(edge->GetId());
             if (shape_ref != info.shapes.end()) {
-                tensor->GetShape() = shape_ref->second;
+                *tensor->GetShape() = shape_ref->second;
             }
         }
 
@@ -195,7 +194,7 @@ RetCode InitRuntimeGraphOutputs(const ir::GraphTopo* topo, const RuntimeGraphInf
 
             auto shape_ref = info.shapes.find(edge->GetId());
             if (shape_ref != info.shapes.end()) {
-                tensor->GetShape() = shape_ref->second;
+                *tensor->GetShape() = shape_ref->second;
             }
         }
 
@@ -211,22 +210,23 @@ static RetCode InitRuntimeGraphConstants(const ir::GraphTopo* topo, const Runtim
 
     constants->reserve(topo->GetConstantCount());
 
-    for (auto x = info.constants.begin(); x != info.constants.end(); ++x) {
-        auto eid = x->first;
-        auto edge = topo->GetEdgeById(eid);
-        if (!edge) {
-            LOG(ERROR) << "cannot find edge info of constant[" << eid << "]";
-            return RC_NOT_FOUND;
-        }
-        auto ret_pair = tensors->insert(make_pair(eid, TensorImpl(edge, TENSORTYPE_RESERVED)));
-        auto tensor = &ret_pair.first->second;
+    for (auto p = info.partitions.begin(); p != info.partitions.end(); ++p) {
+        for (auto c = p->constants.begin(); c != p->constants.end(); ++c) {
+            auto eid = c->first;
+            auto edge = topo->GetEdgeById(eid);
+            if (!edge) {
+                LOG(ERROR) << "cannot find edge info of constant[" << eid << "]";
+                return RC_NOT_FOUND;
+            }
 
-        if (ret_pair.second) {
-            tensor->GetShape() = x->second.GetShape();
-            tensor->SetBuffer(x->second.GetBufferDesc(), x->second.GetDevice());
+            auto ret_pair = tensors->insert(make_pair(eid, TensorImpl(edge, TENSORTYPE_RESERVED)));
+            if (ret_pair.second) {
+                auto tensor = &ret_pair.first->second;
+                tensor->SetBuffer(c->second.GetBufferDesc(), c->second.GetDevice());
+                *tensor->GetShape() = *c->second.GetShape();
+                constants->push_back(tensor);
+            }
         }
-
-        constants->push_back(tensor);
     }
 
     return RC_SUCCESS;
@@ -245,7 +245,7 @@ RetCode RuntimeImpl::InitRuntimeGraph(const ir::GraphTopo* topo, const RuntimeGr
         return status;
     }
 
-    status = InitRuntimeGraphInputs(topo, info, &cpu_device_, graph);
+    status = InitRuntimeGraphInputs(topo, info, graph);
     if (status != RC_SUCCESS) {
         LOG(ERROR) << "InitRuntimeGraphInputs failed: " << GetRetCodeStr(status);
         return status;
@@ -286,10 +286,6 @@ RetCode RuntimeImpl::Init(const shared_ptr<ir::GraphTopo>& topo, const shared_pt
     return sched_->Init(topo.get(), aux_info.get(), &graph_);
 }
 
-RetCode RuntimeImpl::Run() {
-    return sched_->Run(&profiler_);
-}
-
 RetCode RuntimeImpl::Sync() {
     for (uint32_t i = 0; i < GetOutputCount(); ++i) {
         auto output = GetOutputTensorImpl(i);
@@ -303,6 +299,27 @@ RetCode RuntimeImpl::Sync() {
         }
     }
     return RC_SUCCESS;
+}
+
+RetCode RuntimeImpl::Run() {
+    RetCode status;
+
+    for (auto x = engctx_.begin(); x != engctx_.end(); ++x) {
+        status = x->get()->BeforeRun();
+        if (status != RC_SUCCESS) {
+            LOG(ERROR) << "BeforeRun() of EngineContext[" << x->get()->GetName()
+                       << "] failed: " << GetRetCodeStr(status);
+            return status;
+        }
+    }
+
+    status = sched_->Run(&profiler_);
+    if (status != RC_SUCCESS) {
+        LOG(ERROR) << "Run() failed: " << GetRetCodeStr(status);
+        return status;
+    }
+
+    return Sync();
 }
 
 RetCode RuntimeImpl::GetProfilingStatistics(ProfilingStatistics* stat) const {

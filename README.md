@@ -43,7 +43,7 @@ cd ppl.nn
 * Running python demo:
 
 ```bash
-PYTHONPATH=./pplnn-build/install python3 ./tools/pplnn.py --use-x86 --onnx-model tests/testdata/conv.onnx
+PYTHONPATH=./pplnn-build/install/lib python3 ./tools/pplnn.py --use-x86 --onnx-model tests/testdata/conv.onnx
 ```
 
 Refer to [Documents](#documents) for more details.
@@ -74,6 +74,9 @@ Refer to [Documents](#documents) for more details.
   - CUDA
     - [Adding Ops](docs/en/cuda-doc/add_op.md)（[中文版](docs/cn/cuda-doc/add_op.md)）
     - [Benchmark](docs/en/cuda-doc/benchmark_tool.md)（[中文版](docs/cn/cuda-doc/benchmark_tool.md)）
+  - RISCV
+    - [Adding Ops](docs/en/riscv-doc/add_op.md)（[中文版](docs/cn/riscv-doc/add_op.md)）
+    - [Benchmark](docs/en/riscv-doc/benchmark_tool.md)（[中文版](docs/cn/riscv-doc/benchmark_tool.md)）
 
 ### Contact Us
 

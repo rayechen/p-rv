@@ -47,21 +47,20 @@ RetCode GemmOp::SelectFormat(const InputOutputInfo& info, vector<dataformat_t>* 
                              vector<dataformat_t>* selected_output_formats) {
     if (DATAFORMAT_N8CX == selected_input_formats->at(0)) {
         selected_output_formats->at(0) = DATAFORMAT_N8CX;
+    } else if (DATAFORMAT_N4CX == selected_input_formats->at(0)) {
+        selected_output_formats->at(0) = DATAFORMAT_N4CX;
     }
-    selected_input_formats->at(0) = DATAFORMAT_N8CX;
-    selected_output_formats->at(0) = DATAFORMAT_N8CX;    
 
     return RC_SUCCESS;
 }
 
-RetCode GemmOp::SelectDataType(const InputOutputInfo& info,
-                              std::vector<datatype_t>* selected_input_data_types,
-                              std::vector<datatype_t>* selected_output_data_types) {
+RetCode GemmOp::SelectDataType(const InputOutputInfo& info, std::vector<datatype_t>* selected_input_data_types,
+                               std::vector<datatype_t>* selected_output_data_types) {
     if (DATATYPE_FLOAT16 == selected_input_data_types->at(0)) {
         selected_output_data_types->at(0) = DATATYPE_FLOAT16;
+    } else if (DATATYPE_FLOAT32 == selected_input_data_types->at(0)) {
+        selected_output_data_types->at(0) = DATATYPE_FLOAT32;
     }
-    selected_input_data_types->at(0) = DATATYPE_FLOAT16;
-    selected_output_data_types->at(0) = DATATYPE_FLOAT16;
 
     return RC_SUCCESS;
 }

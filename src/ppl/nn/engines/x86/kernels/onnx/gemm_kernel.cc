@@ -35,16 +35,19 @@ ppl::common::RetCode GemmKernel::DoExecute(KernelExecContext* ctx) {
         PPLNN_X86_DEBUG_TRACE("Input [C]:\n");
         PPL_X86_TENSOR_PRINT_DEBUG_MSG(C);
     }
-    PPLNN_X86_DEBUG_TRACE("Output [Y]:\n");
-    PPL_X86_TENSOR_PRINT_DEBUG_MSG(Y);
+
     PPLNN_X86_DEBUG_TRACE("trans_A: %d\n", param_->transA);
     PPLNN_X86_DEBUG_TRACE("trans_B: %d\n", param_->transB);
     PPLNN_X86_DEBUG_TRACE("alpha: %f\n", param_->alpha);
     PPLNN_X86_DEBUG_TRACE("beta: %f\n", param_->beta);
     PPLNN_X86_DEBUG_TRACE("isa: %u\n", GetISA());
 
-    if (A->GetShape().GetDataType() != ppl::common::DATATYPE_FLOAT32 ||
-        A->GetShape().GetDataFormat() != ppl::common::DATAFORMAT_NDARRAY) {
+    PPLNN_X86_REALLOC_TENSOR_BUFFER(Y);
+    PPLNN_X86_DEBUG_TRACE("Output [Y]:\n");
+    PPL_X86_TENSOR_PRINT_DEBUG_MSG(Y);
+
+    if (A->GetShape()->GetDataType() != ppl::common::DATATYPE_FLOAT32 ||
+        A->GetShape()->GetDataFormat() != ppl::common::DATAFORMAT_NDARRAY) {
         LOG(ERROR) << "only support fp32 ndarray now.";
         return ppl::common::RC_UNSUPPORTED;
     }
@@ -60,9 +63,9 @@ ppl::common::RetCode GemmKernel::DoExecute(KernelExecContext* ctx) {
         BNdim = 0;
     }
 
-    const int32_t M = A->GetShape().GetDim(AMdim);
-    const int32_t K = A->GetShape().GetDim(AKdim);
-    const int32_t N = param_->N == 0 ? B->GetShape().GetDim(BNdim) : param_->N;
+    const int32_t M = A->GetShape()->GetDim(AMdim);
+    const int32_t K = A->GetShape()->GetDim(AKdim);
+    const int32_t N = param_->N == 0 ? B->GetShape()->GetDim(BNdim) : param_->N;
 
     ppl::kernel::x86::gemm_v2_param_fp32 param;
     param.src_A = A->GetBufferPtr<float>();
@@ -81,28 +84,28 @@ ppl::common::RetCode GemmKernel::DoExecute(KernelExecContext* ctx) {
     param.isa_flag = GetISA();
 
     if (gemm_fuse_relu_) {
-        param.fuse_flag = ppl::kernel::x86::gemm_v2_fuse_flag::relu;
+        param.fuse_flag = ppl::kernel::x86::gemm_v2_fuse_flag::RELU;
     } else {
-        param.fuse_flag = ppl::kernel::x86::gemm_v2_fuse_flag::none;
+        param.fuse_flag = ppl::kernel::x86::gemm_v2_fuse_flag::NONE;
     }
 
     param.src_C = nullptr;
-    param.c_type = ppl::kernel::x86::gemm_v2_C_type::empty;
+    param.c_type = ppl::kernel::x86::gemm_v2_C_type::EMPTY;
     param.ldc = 0;
-    if (C != nullptr && !C->GetShape().IsEmpty()) {
+    if (C != nullptr && !C->GetShape()->IsEmpty()) {
         param.src_C = C->GetBufferPtr<float>();
-        if (C->GetShape().GetElementsExcludingPadding() == 1) {
-            param.c_type = ppl::kernel::x86::gemm_v2_C_type::scalar;
-        } else if (C->GetShape().GetDimCount() == 1) {
-            param.c_type = ppl::kernel::x86::gemm_v2_C_type::vector_w;
-        } else if (C->GetShape().GetDimCount() == 2) {
-            if (C->GetShape().GetDim(0) == 1) {
-                param.c_type = ppl::kernel::x86::gemm_v2_C_type::vector_w;
-            } else if (C->GetShape().GetDim(1) == 1) {
-                param.c_type = ppl::kernel::x86::gemm_v2_C_type::vector_h;
+        if (C->GetShape()->GetElementsExcludingPadding() == 1) {
+            param.c_type = ppl::kernel::x86::gemm_v2_C_type::SCALAR;
+        } else if (C->GetShape()->GetDimCount() == 1) {
+            param.c_type = ppl::kernel::x86::gemm_v2_C_type::VECTOR_W;
+        } else if (C->GetShape()->GetDimCount() == 2) {
+            if (C->GetShape()->GetDim(0) == 1) {
+                param.c_type = ppl::kernel::x86::gemm_v2_C_type::VECTOR_W;
+            } else if (C->GetShape()->GetDim(1) == 1) {
+                param.c_type = ppl::kernel::x86::gemm_v2_C_type::VECTOR_H;
             } else {
-                param.c_type = ppl::kernel::x86::gemm_v2_C_type::matrix;
-                param.ldc = C->GetShape().GetDim(1);
+                param.c_type = ppl::kernel::x86::gemm_v2_C_type::MATRIX;
+                param.ldc = C->GetShape()->GetDim(1);
             }
         }
     }
@@ -126,6 +129,8 @@ ppl::common::RetCode GemmKernel::DoExecute(KernelExecContext* ctx) {
         GetX86Device()->FreeTmpBuffer(buffer);
     });
     auto tmp_buffer = tmp_buffer_desc.addr;
+    PPLNN_X86_DEBUG_TRACE("buffer: %p\n", tmp_buffer);
+
     executor->set_temp_buffer(tmp_buffer);
 
     return executor->execute();

@@ -23,9 +23,9 @@
 
 namespace ppl { namespace nn { namespace riscv {
 
-class ConcatOp final : public RISCVOptKernel {
+class ConcatOp final : public RiscvOptKernel {
 public:
-    ConcatOp(const ir::Node* node) : RISCVOptKernel(node) {}
+    ConcatOp(const ir::Node* node) : RiscvOptKernel(node) {}
     ppl::common::RetCode Init(const OptKernelOptions& options) override;
     KernelImpl* CreateKernelImpl() const override;
     ppl::common::RetCode SelectFormat(const InputOutputInfo& info,
@@ -39,6 +39,6 @@ private:
     std::shared_ptr<ppl::nn::common::ConcatParam> param_;
 };
 
-}}};    // namespace ppl::nn::riscv
+}}}; // namespace ppl::nn::riscv
 
-#endif  //  _ST_HPC_PPL_NN_ENGINES_RISCV_OPTIMIZER_OPS_ONNX_CONCAT_OP_H_
+#endif //  _ST_HPC_PPL_NN_ENGINES_RISCV_OPTIMIZER_OPS_ONNX_CONCAT_OP_H_

@@ -24,10 +24,10 @@
 #ifndef PPLNN_RISCV_DEBUG_TRACE
 #if defined(DEBUG) || !defined(NDEBUG)
 #include <stdio.h>
-#define PPLNN_RISCV_DEBUG_TRACE(fmt, ...) \
-    do { \
+#define PPLNN_RISCV_DEBUG_TRACE(fmt, ...)                                                                 \
+    do {                                                                                                  \
         fprintf(stderr, "T [%s:%d] " fmt, ppl::common::stripfilename(__FILE__), __LINE__, ##__VA_ARGS__); \
-        fflush(stderr); \
+        fflush(stderr);                                                                                   \
     } while (0)
 #else
 #define PPLNN_RISCV_DEBUG_TRACE(fmt, ...)
@@ -35,39 +35,43 @@
 #endif // Not define PPLNN_RISCV_DEBUG_TRACE
 
 #define PPL_RISCV_TENSOR_PRINT_DEBUG_MSG(X)                                                                        \
-    do {                                                                                                         \
-        if (X->GetShape().IsScalar()) {                                                                          \
+    do {                                                                                                           \
+        if (X->GetShape()->IsScalar()) {                                                                            \
             PPLNN_RISCV_DEBUG_TRACE("Scalar name: %s\n", X->GetName());                                            \
-            PPLNN_RISCV_DEBUG_TRACE("\tdata: %p type: %u\n", X->GetBufferPtr(), X->GetShape().GetDataType());      \
-        } else {                                                                                                 \
+            PPLNN_RISCV_DEBUG_TRACE("\tdata: %p type: %u\n", X->GetBufferPtr(), X->GetShape()->GetDataType());      \
+        } else {                                                                                                   \
             PPLNN_RISCV_DEBUG_TRACE("Tensor name: %s\n", X->GetName());                                            \
             PPLNN_RISCV_DEBUG_TRACE("\tdata: %p\n", X->GetBufferPtr());                                            \
-            PPLNN_RISCV_DEBUG_TRACE("DimCount: %u\n", X->GetShape().GetDimCount());                                \
-            for (uint32_t i = 0; i < X->GetShape().GetDimCount(); ++i) {                                         \
-                PPLNN_RISCV_DEBUG_TRACE("\tdim[%u]: %ld\tpads: [%hu, %hu]\n", i, X->GetShape().GetDim(i),          \
-                                      X->GetShape().GetPadding0(i), X->GetShape().GetPadding1(i));               \
-            }                                                                                                    \
-        }                                                                                                        \
-        PPLNN_RISCV_DEBUG_TRACE("DataType: %s\n", ppl::common::GetDataTypeStr(X->GetShape().GetDataType()));       \
-        PPLNN_RISCV_DEBUG_TRACE("DataFormat: %s\n", ppl::common::GetDataFormatStr(X->GetShape().GetDataFormat())); \
+            PPLNN_RISCV_DEBUG_TRACE("DimCount: %u\n", X->GetShape()->GetDimCount());                                \
+            for (uint32_t i = 0; i < X->GetShape()->GetDimCount(); ++i) {                                           \
+                PPLNN_RISCV_DEBUG_TRACE("\tdim[%u]: %ld\tpads: [%hu, %hu]\n", i, X->GetShape()->GetDim(i),          \
+                                        X->GetShape()->GetPadding0(i), X->GetShape()->GetPadding1(i));               \
+            }                                                                                                      \
+        }                                                                                                          \
+        PPLNN_RISCV_DEBUG_TRACE("DataType: %s\n", ppl::common::GetDataTypeStr(X->GetShape()->GetDataType()));       \
+        PPLNN_RISCV_DEBUG_TRACE("DataFormat: %s\n", ppl::common::GetDataFormatStr(X->GetShape()->GetDataFormat())); \
     } while (0)
 
-#define PPLNN_RISCV_REQUIRED_INPUT(X, IDX) \
+#define PPLNN_RISCV_REQUIRED_INPUT(X, IDX)                                          \
     auto X = ctx->GetInputCount() > IDX ? ctx->GetInput<TensorImpl>(IDX) : nullptr; \
-    if (!X) { \
-        LOG(ERROR) << "Input \""<< #X << "\" is required."; \
-        return ppl::common::RC_NOT_FOUND; \
-    } do {} while (0)
+    if (!X) {                                                                       \
+        LOG(ERROR) << "Input \"" << #X << "\" is required.";                        \
+        return ppl::common::RC_NOT_FOUND;                                           \
+    }                                                                               \
+    do {                                                                            \
+    } while (0)
 
 #define PPLNN_RISCV_OPTIONAL_INPUT(X, IDX) \
     auto X = ctx->GetInputCount() > IDX ? ctx->GetInput<TensorImpl>(IDX) : nullptr
 
-#define PPLNN_RISCV_REQUIRED_OUTPUT(X, IDX) \
+#define PPLNN_RISCV_REQUIRED_OUTPUT(X, IDX)                                           \
     auto X = ctx->GetOutputCount() > IDX ? ctx->GetOutput<TensorImpl>(IDX) : nullptr; \
-    if (!X) { \
-        LOG(ERROR) << "Output \""<< #X << "\" is required."; \
-        return ppl::common::RC_NOT_FOUND; \
-    } do {} while (0)
+    if (!X) {                                                                         \
+        LOG(ERROR) << "Output \"" << #X << "\" is required.";                         \
+        return ppl::common::RC_NOT_FOUND;                                             \
+    }                                                                                 \
+    do {                                                                              \
+    } while (0)
 
 #define PPLNN_RISCV_OPTIONAL_OUTPUT(X, IDX) \
     auto X = ctx->GetOutputCount() > IDX ? ctx->GetOutput<TensorImpl>(IDX) : nullptr

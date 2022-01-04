@@ -71,6 +71,7 @@ void conv2d_n16cx_direct_fp32_avx512_executor::cal_kernel_tunning_param()
 
     const int64_t num_thread   = PPL_OMP_MAX_THREADS();
     const int64_t batch        = src_shape_->GetDim(0);
+    const int64_t channels     = src_shape_->GetDim(1);
     const int64_t src_h        = src_shape_->GetDim(2);
     const int64_t src_w        = src_shape_->GetDim(3);
     const int64_t dst_h        = dst_shape_->GetDim(2);
@@ -95,7 +96,8 @@ void conv2d_n16cx_direct_fp32_avx512_executor::cal_kernel_tunning_param()
 
     if (dst_h <= 112 && dst_w <= 112
         && cp.stride_w < dst_w && cp.pad_w != 0
-        && cp.dilation_w < dst_w) {
+        && cp.dilation_w < dst_w
+        && !(channels / cp.group <= 4 * CH_DT_BLK() && cp.group >= PPL_OMP_MAX_THREADS())) {
         sp.padding_policy = PADDING_POLICY_PREPAD();
     } else {
         sp.padding_policy = PADDING_POLICY_NOPAD();
@@ -124,11 +126,18 @@ void conv2d_n16cx_direct_fp32_avx512_executor::cal_kernel_tunning_param()
         sp.unroll_ow_end = dst_w;
     }
 
-    static const int64_t oc_rf_table[14] = { 4, 4, 4, 4, 4, 4, 3, 3, 3, 2, 2, 2, 2, 2 };
+    static const int64_t ow2oc_table[14] = { 4, 4, 4, 4, 4, 4, 3, 3, 3, 2, 2, 2, 2, 2 };
+    static const int64_t oc2ow_table[4] = { 14, 14, 9, 6 };
 
     if (sp.unroll_ow_start < sp.unroll_ow_end) {
-        sp.ow_kr_blk = min<int64_t>(sp.unroll_ow_end - sp.unroll_ow_start, MAX_OW_RF());
-        sp.oc_kr_blk = oc_rf_table[sp.ow_kr_blk - 1] * CH_DT_BLK();
+        if (sp.padded_oc <= 4 * CH_DT_BLK()) {
+            sp.oc_kr_blk = sp.padded_oc;
+            sp.ow_kr_blk = oc2ow_table[sp.padded_oc / CH_DT_BLK() - 1];
+            sp.ow_kr_blk = min<int64_t>(sp.unroll_ow_end - sp.unroll_ow_start, sp.ow_kr_blk);
+        } else {
+            sp.ow_kr_blk = min<int64_t>(sp.unroll_ow_end - sp.unroll_ow_start, MAX_OW_RF());
+            sp.oc_kr_blk = ow2oc_table[sp.ow_kr_blk - 1] * CH_DT_BLK();
+        }
     } else {
         sp.ow_kr_blk = MAX_OW_RF();
         sp.oc_kr_blk = 4 * CH_DT_BLK();
@@ -149,12 +158,12 @@ uint64_t conv2d_n16cx_direct_fp32_avx512_executor::cal_temp_buffer_size()
         const uint64_t padded_src_hw = uint64_t(src_h) * (src_w + 2 * conv_param_->pad_w);
         return padded_src_hw * schedule_param_.mb_l3_blk * schedule_param_.gp_l3_blk * schedule_param_.ic_l2_blk * sizeof(float);
     }
-    return 64u;
+    return 0;
 }
 
 ppl::common::RetCode conv2d_n16cx_direct_fp32_avx512_executor::prepare()
 {
-    if (!conv_param_ || !src_shape_ || !dst_shape_ || ((conv_param_->fuse_flag & conv_fuse_flag::sum) && !sum_src_shape_)) {
+    if (!conv_param_ || !src_shape_ || !dst_shape_ || ((conv_param_->fuse_flag & conv_fuse_flag::SUM) && !sum_src_shape_)) {
         return ppl::common::RC_INVALID_VALUE;
     }
 
@@ -166,12 +175,16 @@ ppl::common::RetCode conv2d_n16cx_direct_fp32_avx512_executor::prepare()
 
 ppl::common::RetCode conv2d_n16cx_direct_fp32_avx512_executor::execute()
 {
-    if (!conv_param_ || !cvt_filter_ || !cvt_bias_ || !src_ || !dst_ || ((conv_param_->fuse_flag & conv_fuse_flag::sum) && !sum_src_) || !temp_buffer_) {
+    if (!conv_param_ || !cvt_filter_ || !cvt_bias_ || !src_ || !dst_ || ((conv_param_->fuse_flag & conv_fuse_flag::SUM) && !sum_src_)) {
         return ppl::common::RC_INVALID_VALUE;
     }
 
     const conv2d_fp32_param &cp     = *conv_param_;
     const kernel_schedule_param &sp = schedule_param_;
+
+    if (sp.padding_policy == PADDING_POLICY_PREPAD() && !temp_buffer_) {
+        return ppl::common::RC_INVALID_VALUE;
+    }
 
     const int64_t batch = src_shape_->GetDim(0);
     const int64_t src_h = src_shape_->GetDim(2);
@@ -196,9 +209,9 @@ ppl::common::RetCode conv2d_n16cx_direct_fp32_avx512_executor::execute()
     const int64_t flt_g_stride   = sp.ic_l2_cnt * sp.padded_oc * cp.kernel_h * cp.kernel_w * sp.ic_l2_blk;
     const int64_t flt_ocb_stride = sp.ic_l2_blk * cp.kernel_h * cp.kernel_w * CH_DT_BLK();
 
-    const bool with_sum   = cp.fuse_flag & conv_fuse_flag::sum;
-    const bool with_relu  = cp.fuse_flag & conv_fuse_flag::relu;
-    const bool with_relu6 = cp.fuse_flag & conv_fuse_flag::relu6;
+    const bool with_sum   = cp.fuse_flag & conv_fuse_flag::SUM;
+    const bool with_relu  = cp.fuse_flag & conv_fuse_flag::RELU;
+    const bool with_relu6 = cp.fuse_flag & conv_fuse_flag::RELU6;
 
     int64_t sum_src_b_stride = 0;
     if (with_sum) {

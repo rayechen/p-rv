@@ -20,14 +20,13 @@
 #include "ppl/nn/common/logger.h"
 #include "ppl/nn/engines/cuda/kernels/onnx/slice_kernel.h"
 #include "ppl/nn/oputils/onnx/reshape_slice.h"
-
 using namespace std;
 using namespace ppl::common;
 
 namespace ppl { namespace nn { namespace cuda {
 
 RetCode SliceOp::Init(const OptKernelOptions& options) {
-    infer_type_func_ = [this](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
+    infer_type_func_ = [](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
         ppl::common::RetCode status;
         if (type == DATATYPE_UNKNOWN) {
             status = InferInheritedType(info);
@@ -36,13 +35,19 @@ RetCode SliceOp::Init(const OptKernelOptions& options) {
         } else {
             status = InferDefaultType(info, type);
         }
+        for (uint32_t i = 1; i < 5; ++i) {
+            if (info->GetInputCount() > i) {
+                auto shape = info->GetInput<TensorImpl>(i)->GetShape();
+                shape->SetDataType(ppl::common::DATATYPE_INT64);
+            }
+        }
         return status;
     };
 
-    infer_dims_func_ = [this](InputOutputInfo* info) -> RetCode {
+    infer_dims_func_ = [](InputOutputInfo* info) -> RetCode {
         SliceKernelParam kernel_param;
 
-        const TensorShape& in_shape0 = info->GetInput<TensorImpl>(0)->GetShape();
+        const TensorShape& in_shape0 = *info->GetInput<TensorImpl>(0)->GetShape();
         int dim_count = in_shape0.GetDimCount();
         int input_count = info->GetInputCount();
         { // starts
@@ -77,7 +82,7 @@ RetCode SliceOp::Init(const OptKernelOptions& options) {
                 LOG(ERROR) << "Copy axes input failed: " << GetRetCodeStr(status);
                 return status;
             }
-            kernel_param.axes_num = input->GetShape().GetElementsIncludingPadding();
+            kernel_param.axes_num = input->GetShape()->GetElementsIncludingPadding();
         } else {
             for (int it = 0; it < dim_count; ++it) {
                 kernel_param.axes[it] = it;
@@ -128,7 +133,6 @@ RetCode SliceOp::Init(const OptKernelOptions& options) {
             kernel_param.starts[it] = start_val;
             kernel_param.ends[it] = end_val;
         }
-
         return oputils::ReshapeSlice(info, kernel_param.starts, kernel_param.ends, kernel_param.axes,
                                      kernel_param.steps);
     };

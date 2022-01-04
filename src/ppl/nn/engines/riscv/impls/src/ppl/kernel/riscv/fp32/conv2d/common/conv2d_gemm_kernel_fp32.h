@@ -1,170 +1,190 @@
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
 #ifndef __ST_PPL_KERNEL_RISCV_FP32_CONV2D_COMMON_CONV2D_GEMM_KERNEL_FP32_H_
 #define __ST_PPL_KERNEL_RISCV_FP32_CONV2D_COMMON_CONV2D_GEMM_KERNEL_FP32_H_
 
-// #include "ppl/kernel/riscv/fp16/conv2d/common/conv2d_ndarray_gemm_cto8c_kernel_fp16.h"
+#include "ppl/kernel/riscv/fp32/conv2d/common/gemm_kernel/conv2d_n4cx_n4cx_gemm_kernel_fp32_vec128.h"
+#include "ppl/kernel/riscv/fp32/conv2d/common/gemm_kernel/conv2d_ndarray_n4cx_gemm_kernel_fp32_vec128.h"
 
-namespace ppl { namespace kernel {namespace riscv {
+namespace ppl { namespace kernel { namespace riscv {
 
-typedef void (*conv2d_gemm_kernel_m8nx_riscv_fp32_type_t)(
-    const float *kernel_A,
-    const float *kernel_B,
-    float *kernel_C,
-    int64_t k,
-    int64_t total_n
-);
+typedef void (*conv2d_gemm_kernel_func_riscv_fp32_type_t)(const float* A, const float* B, float* C, const int64_t m,
+                                                          const int64_t n, const int64_t k);
 
-typedef void (*conv2d_gemm_kernel_func_riscv_fp32_type_t) (
-    const float *A,
-    const float *B,
-    float *C,
-    int64_t m,
-    int64_t n,
-    int64_t k
-);
-
-template<int64_t align_n, int64_t align_left_n, conv2d_gemm_kernel_m8nx_riscv_fp32_type_t core_func, conv2d_gemm_kernel_m8nx_riscv_fp32_type_t core_left_func>
-static void ppl3_conv_gemm_cto8c_kernel_fp16(
-    const float *A,
-    const float *B,
-    float *C,
-    int64_t m,
-    int64_t n,
-    int64_t k) {
-
-    const int64_t atom_m = 4;
-
-    int64_t mi, ni;
-    int64_t kernel_m_stride = k * atom_m;
-
-    for (mi = 0; mi < m; mi += atom_m) {
-        auto temp_B = B;
-        for (ni = 0; ni <= n - align_n; ni += align_n) {
-            core_func(A, temp_B, C, k, n);
-
-            C += align_n * atom_m;
-            temp_B += align_n;
-        }
-
-        if (align_left_n != 0) {
-            core_left_func(A, temp_B, C, k, n);
-            C += align_left_n * atom_m;
-        }
-        A += kernel_m_stride;
-    }
-}
-
-template <int64_t align_n, int64_t align_left_n, conv2d_gemm_kernel_m8nx_riscv_fp32_type_t core_func, conv2d_gemm_kernel_m8nx_riscv_fp32_type_t core_left_func>
-static void ppl3_conv_gemm_kernel_fp16(
-    const float *A,
-    const float *B,
-    float *C,
-    int64_t m,
-    int64_t n,
-    int64_t k) {
-    const int64_t atom_m = 4;
-
-    int64_t mi, ni;
-    int64_t kernel_n_stride = align_n * atom_m;
-    int64_t kernel_n_left_stride = align_left_n * atom_m;
-    int64_t kernel_m_stride = k * atom_m;
-
-    for (mi = 0; mi < m; mi += atom_m) {
-        auto temp_B = B;
-        for (ni = 0; ni <= n - align_n; ni += align_n) {
-            core_func(A, temp_B, C, k, n);
-
-            C += kernel_n_stride;
-            temp_B += kernel_n_stride;
-        }
-
-        if (align_left_n != 0) {
-            core_left_func(A, temp_B, C, k, n);
-            C += kernel_n_left_stride;
-        }
-        A += kernel_m_stride;
-    }
-}
-
-template<bool first>
-void conv2d_gemm_kernel_cto4c_fp32 (
-    const float *A,
-    const float *B,
-    float *C,
-    int64_t m,
-    int64_t n,
-    int64_t k) {
-
-    const int atom_ic = 1, atom_oc = 4;
-
-    if (first) {
-        for (int mi = 0; mi < m; mi += 1) {
-            for (int ni = 0; ni < n; ni += 1) {
-                int c_idx = mi / atom_oc * n * atom_oc + ni * atom_oc + mi % atom_oc;
-                C[c_idx] = 0.0f;
+template <bool first>
+conv2d_gemm_kernel_func_riscv_fp32_type_t conv2d_gemm_select_cto4c_kernel_fp32_vec128(int64_t m, int64_t n) {
+    switch (m % 16) {
+        case 4:
+            switch (n % 7) {
+                case 0:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 4, 7, first>;
+                case 1:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 4, 1, first>;
+                case 2:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 4, 2, first>;
+                case 3:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 4, 3, first>;
+                case 4:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 4, 4, first>;
+                case 5:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 4, 5, first>;
+                case 6:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 4, 6, first>;
             }
-        }
-    }
-
-    for (int mi = 0; mi < m; mi += 1) {
-        for (int ni = 0; ni < n; ni += 1) {
-            for (int ki = 0; ki < k; ki += 1) {
-                int a_idx = mi / atom_oc * k * atom_oc + ki * atom_oc + mi % atom_oc;
-                int b_idx = ki / atom_ic * n * atom_ic + ni * atom_ic + ki % atom_ic;
-                int c_idx = mi / atom_oc * n * atom_oc + ni * atom_oc + mi % atom_oc;
-                C[c_idx] += A[a_idx] * B[b_idx];
+        case 8:
+            switch (n % 7) {
+                case 0:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 8, 7, first>;
+                case 1:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 8, 1, first>;
+                case 2:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 8, 2, first>;
+                case 3:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 8, 3, first>;
+                case 4:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 8, 4, first>;
+                case 5:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 8, 5, first>;
+                case 6:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 8, 6, first>;
             }
-        }
-    }
-}
-
-template<bool first>
-void conv2d_gemm_kernel_4cto4c_fp32 (
-    const float *A,
-    const float *B,
-    float *C,
-    int64_t m,
-    int64_t n,
-    int64_t k) {
-    
-    const int atom_ic = 4, atom_oc = 4;
-
-    if (first) {
-        for (int mi = 0; mi < m; mi += 1) {
-            for (int ni = 0; ni < n; ni += 1) {
-                int c_idx = mi / atom_oc * n * atom_oc + ni * atom_oc + mi % atom_oc;
-                C[c_idx] = 0.0f;
+        case 12:
+            switch (n % 7) {
+                case 0:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 12, 7, first>;
+                case 1:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 12, 1, first>;
+                case 2:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 12, 2, first>;
+                case 3:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 12, 3, first>;
+                case 4:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 12, 4, first>;
+                case 5:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 12, 5, first>;
+                case 6:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 12, 6, first>;
             }
-        }
-    }
-
-    for (int mi = 0; mi < m; mi += 1) {
-        for (int ni = 0; ni < n; ni += 1) {
-            for (int ki = 0; ki < k; ki += 1) {
-                int a_idx = mi / atom_oc * k * atom_oc + ki * atom_oc + mi % atom_oc;
-                int b_idx = ki / atom_ic * n * atom_ic + ni * atom_ic + ki % atom_ic;
-                int c_idx = mi / atom_oc * n * atom_oc + ni * atom_oc + mi % atom_oc;
-                C[c_idx] += A[a_idx] * B[b_idx];
+        case 0:
+            switch (n % 7) {
+                case 0:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 16, 7, first>;
+                case 1:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 16, 1, first>;
+                case 2:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 16, 2, first>;
+                case 3:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 16, 3, first>;
+                case 4:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 16, 4, first>;
+                case 5:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 16, 5, first>;
+                case 6:
+                    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 16, 6, first>;
             }
-        }
     }
-}
-
-template<bool first>
-conv2d_gemm_kernel_func_riscv_fp32_type_t conv2d_gemm_select_cto4c_kernel_fp32_vec128(int64_t n) {
-    return conv2d_gemm_kernel_cto4c_fp32<first>;
+    return gemm_ndarray_n4cx_fp32_vec128<16, 7, 16, 7, first>;
 }
 
 template <bool first>
 conv2d_gemm_kernel_func_riscv_fp32_type_t conv2d_gemm_select_4cto4c_kernel_fp32_vec128(int64_t m, int64_t n) {
-    return conv2d_gemm_kernel_4cto4c_fp32<first>;
+    switch (m % 16) {
+        case 4:
+            switch (n % 7) {
+                case 0:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 4, 7, first>;
+                case 1:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 4, 1, first>;
+                case 2:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 4, 2, first>;
+                case 3:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 4, 3, first>;
+                case 4:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 4, 4, first>;
+                case 5:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 4, 5, first>;
+                case 6:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 4, 6, first>;
+            }
+        case 8:
+            switch (n % 7) {
+                case 0:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 8, 7, first>;
+                case 1:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 8, 1, first>;
+                case 2:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 8, 2, first>;
+                case 3:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 8, 3, first>;
+                case 4:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 8, 4, first>;
+                case 5:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 8, 5, first>;
+                case 6:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 8, 6, first>;
+            }
+        case 12:
+            switch (n % 7) {
+                case 0:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 12, 7, first>;
+                case 1:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 12, 1, first>;
+                case 2:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 12, 2, first>;
+                case 3:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 12, 3, first>;
+                case 4:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 12, 4, first>;
+                case 5:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 12, 5, first>;
+                case 6:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 12, 6, first>;
+            }
+        case 0:
+            switch (n % 7) {
+                case 0:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 16, 7, first>;
+                case 1:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 16, 1, first>;
+                case 2:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 16, 2, first>;
+                case 3:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 16, 3, first>;
+                case 4:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 16, 4, first>;
+                case 5:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 16, 5, first>;
+                case 6:
+                    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 16, 6, first>;
+            }
+    }
+    return gemm_n4cx_n4cx_fp32_vec128<16, 7, 16, 7, first>;
 }
 
-template<int64_t src_atom_c, bool first>
+template <int64_t src_atom_c, bool first>
 conv2d_gemm_kernel_func_riscv_fp32_type_t conv2d_gemm_select_xcto4c_kernel_fp32_vec128(int64_t m, int64_t n) {
     switch (src_atom_c) {
-        case 1: return conv2d_gemm_select_cto4c_kernel_fp32_vec128<first>(n);
-        case 4: return conv2d_gemm_select_4cto4c_kernel_fp32_vec128<first>(m, n);
-        default: return conv2d_gemm_select_4cto4c_kernel_fp32_vec128<first>(m, n);
+        case 1:
+            return conv2d_gemm_select_cto4c_kernel_fp32_vec128<first>(m, n);
+        case 4:
+            return conv2d_gemm_select_4cto4c_kernel_fp32_vec128<first>(m, n);
+        default:
+            return conv2d_gemm_select_4cto4c_kernel_fp32_vec128<first>(m, n);
     }
 }
 

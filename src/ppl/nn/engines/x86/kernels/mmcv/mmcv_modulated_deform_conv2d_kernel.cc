@@ -24,15 +24,15 @@ namespace ppl { namespace nn { namespace x86 {
 uint64_t MMCVModulatedDeformConv2dKernel::CalcTmpBufferSize(const KernelExecContext& ctx) const {
     auto weight = ctx.GetInput<TensorImpl>(3);
     auto output = ctx.GetOutput<TensorImpl>(0);
-    auto channels = weight->GetShape().GetDim(1) * param_->groups;
+    auto channels = weight->GetShape()->GetDim(1) * param_->groups;
     if (MayUseISA(ppl::common::ISA_X86_FMA)) {
         return ppl::kernel::x86::deform_conv2d_fp32_fma_get_buffer_bytes(
-            output->GetShape().GetDim(2), output->GetShape().GetDim(3), param_->groups,
-            channels, weight->GetShape().GetDim(2), weight->GetShape().GetDim(3));
+            output->GetShape()->GetDim(2), output->GetShape()->GetDim(3), param_->groups,
+            channels, weight->GetShape()->GetDim(2), weight->GetShape()->GetDim(3));
     } else {
         return ppl::kernel::x86::deform_conv2d_ref_fp32_get_buffer_bytes(
-            output->GetShape().GetDim(2), output->GetShape().GetDim(3), param_->groups,
-            channels, weight->GetShape().GetDim(2), weight->GetShape().GetDim(3));
+            output->GetShape()->GetDim(2), output->GetShape()->GetDim(3), param_->groups,
+            channels, weight->GetShape()->GetDim(2), weight->GetShape()->GetDim(3));
     }
 }
 
@@ -45,6 +45,7 @@ ppl::common::RetCode MMCVModulatedDeformConv2dKernel::DoExecute(KernelExecContex
     PPLNN_X86_REQUIRED_OUTPUT(output, 0);
 
     PPLNN_X86_DEBUG_TRACE("Op: %s\n", GetName().c_str());
+
     PPLNN_X86_DEBUG_TRACE("Input [input]:\n");
     PPL_X86_TENSOR_PRINT_DEBUG_MSG(input);
     PPLNN_X86_DEBUG_TRACE("Input [offset]:\n");
@@ -53,13 +54,16 @@ ppl::common::RetCode MMCVModulatedDeformConv2dKernel::DoExecute(KernelExecContex
     PPL_X86_TENSOR_PRINT_DEBUG_MSG(mask);
     PPLNN_X86_DEBUG_TRACE("Input [weight]:\n");
     PPL_X86_TENSOR_PRINT_DEBUG_MSG(weight);
-    PPLNN_X86_DEBUG_TRACE("Output [output]:\n");
-    PPL_X86_TENSOR_PRINT_DEBUG_MSG(output);
+
     PPLNN_X86_DEBUG_TRACE("stride: %ld, %ld\n", param_->stride[0], param_->stride[1]);
     PPLNN_X86_DEBUG_TRACE("padding: %ld, %ld\n", param_->padding[0], param_->padding[1]);
     PPLNN_X86_DEBUG_TRACE("dilation: %ld, %ld\n", param_->dilation[0], param_->dilation[1]);
     PPLNN_X86_DEBUG_TRACE("groups: %ld\n", param_->groups);
     PPLNN_X86_DEBUG_TRACE("deform_groups: %ld\n", param_->deform_groups);
+
+    PPLNN_X86_REALLOC_TENSOR_BUFFER(output);
+    PPLNN_X86_DEBUG_TRACE("Output [output]:\n");
+    PPL_X86_TENSOR_PRINT_DEBUG_MSG(output);
 
     BufferDesc tmp_buffer_desc;
     auto tmp_buffer_size = CalcTmpBufferSize(*ctx);
@@ -74,10 +78,10 @@ ppl::common::RetCode MMCVModulatedDeformConv2dKernel::DoExecute(KernelExecContex
     });
     auto tmp_buffer = tmp_buffer_desc.addr;
 
-    const int64_t num_output = weight->GetShape().GetDim(0);
-    const int64_t channels = weight->GetShape().GetDim(1) * param_->groups;
-    const int64_t kernel_h = weight->GetShape().GetDim(2);
-    const int64_t kernel_w = weight->GetShape().GetDim(3);
+    const int64_t num_output = weight->GetShape()->GetDim(0);
+    const int64_t channels = weight->GetShape()->GetDim(1) * param_->groups;
+    const int64_t kernel_h = weight->GetShape()->GetDim(2);
+    const int64_t kernel_w = weight->GetShape()->GetDim(3);
 
     const float *b_data = nullptr;
     if (bias) {
@@ -86,7 +90,7 @@ ppl::common::RetCode MMCVModulatedDeformConv2dKernel::DoExecute(KernelExecContex
 
     if (MayUseISA(ppl::common::ISA_X86_FMA)) {
         return ppl::kernel::x86::deform_conv2d_fp32_fma(
-            &input->GetShape(), &output->GetShape(),
+            input->GetShape(), output->GetShape(),
             input->GetBufferPtr<const float>(), offset->GetBufferPtr<const float>(),
             mask->GetBufferPtr<const float>(), weight->GetBufferPtr<const float>(), b_data,
             param_->groups, param_->deform_groups, channels, num_output,
@@ -95,7 +99,7 @@ ppl::common::RetCode MMCVModulatedDeformConv2dKernel::DoExecute(KernelExecContex
             tmp_buffer, output->GetBufferPtr<float>());
     } else {
         return ppl::kernel::x86::deform_conv2d_ref_fp32(
-            &input->GetShape(), &output->GetShape(),
+            input->GetShape(), output->GetShape(),
             input->GetBufferPtr<const float>(), offset->GetBufferPtr<const float>(),
             mask->GetBufferPtr<const float>(), weight->GetBufferPtr<const float>(), b_data,
             param_->groups, param_->deform_groups, channels, num_output,

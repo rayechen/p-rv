@@ -28,15 +28,6 @@ RetCode SigmoidOp::Init(const OptKernelOptions& options) {
     return RC_SUCCESS;
 }
 
-RetCode SigmoidOp::SelectDataType(const InputOutputInfo& info,
-                                vector<datatype_t>* selected_input_data_types,
-                                vector<datatype_t>* selected_output_data_types) {
-    
-    selected_input_data_types->at(0) = DATATYPE_FLOAT32;
-    selected_output_data_types->at(0) = DATATYPE_FLOAT32;
-    return RC_SUCCESS;
-}
-
 KernelImpl* SigmoidOp::CreateKernelImpl() const {
     return CreateKernelImplWithoutParam<SigmoidKernel>();
 }

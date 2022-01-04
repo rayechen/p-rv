@@ -24,17 +24,12 @@ namespace ppl { namespace nn { namespace riscv {
 
 RetCode ReorderOp::Init(const OptKernelOptions& options) {
     infer_dims_func_ = [](InputOutputInfo* info) -> RetCode {
-        auto& input = info->GetInput<TensorImpl>(0)->GetShape();
-        auto& output = info->GetOutput<TensorImpl>(0)->GetShape();
+        auto& input = *info->GetInput<TensorImpl>(0)->GetShape();
+        auto& output = *info->GetOutput<TensorImpl>(0)->GetShape();
         if (input.GetDimCount() != 4 && input.GetDimCount() != 2) {
             return RC_UNSUPPORTED;
         }
 
-
-        // if (output.GetDataFormat() == DATAFORMAT_N8CX && input.GetDimCount() < 3) {
-            // auto padded_output_shape = PadShapeTo3Dims(input);
-        //     output.Reshape(padded_output_shape.GetDims(), padded_output_shape.GetDimCount());
-        // } else {
         if (input.IsScalar()) {
             output.ReshapeAsScalar();
         } else {
@@ -43,7 +38,7 @@ RetCode ReorderOp::Init(const OptKernelOptions& options) {
         return RC_SUCCESS;
     };
 
-    infer_type_func_ = PassiveInferType;
+    infer_type_func_ = GenericInferType;
     return RC_SUCCESS;
 }
 

@@ -43,16 +43,59 @@ __device__ void atomic_min(T *addr, T val)
     atomicMin(addr, val);
 }
 
+__device__ __inline__ void atomic_max(int8_t *addr, int8_t val)
+{
+    if (*addr >= val)
+        return;
+
+    unsigned int *const addr_as_ull = (unsigned int *)addr;
+    unsigned int old               = *addr_as_ull, assumed;
+    do {
+        assumed = old;
+        if (reinterpret_cast<int8_t&>(assumed) >= val)
+            break;
+        old = atomicCAS(addr_as_ull, assumed, val);
+    } while (assumed != old);
+}
+
+__device__ __inline__ void atomic_add(int8_t *addr, int8_t val)
+{
+    if (*addr >= val)
+        return;
+
+    unsigned int *const addr_as_ull = (unsigned int *)addr;
+    unsigned int old               = *addr_as_ull, assumed;
+    do {
+        assumed = old;
+        old = atomicCAS(addr_as_ull, assumed, reinterpret_cast<int8_t&>(old) + val);
+    } while (assumed != old);
+}
+
+__device__ __inline__ void atomic_min(int8_t *addr, int8_t val)
+{
+    if (*addr >= val)
+        return;
+
+    unsigned int *const addr_as_ull = (unsigned int *)addr;
+    unsigned int old               = *addr_as_ull, assumed;
+    do {
+        assumed = old;
+        if (reinterpret_cast<int8_t&>(assumed) <= val)
+            break;
+        old = atomicCAS(addr_as_ull, assumed, val);
+    } while (assumed != old);
+}
+
 __device__ __inline__ void atomic_max(int64_t *addr, int64_t val)
 {
     if (*addr >= val)
         return;
 
     unsigned long long *const addr_as_ull = (unsigned long long *)addr;
-    unsigned long long old               = *addr_as_ull, assumed;
+    unsigned long long old                = *addr_as_ull, assumed;
     do {
         assumed = old;
-        if (reinterpret_cast<int64_t&>(assumed) >= val)
+        if (reinterpret_cast<int64_t &>(assumed) >= val)
             break;
         old = atomicCAS(addr_as_ull, assumed, val);
     } while (assumed != old);
@@ -64,10 +107,10 @@ __device__ __inline__ void atomic_add(int64_t *addr, int64_t val)
         return;
 
     unsigned long long *const addr_as_ull = (unsigned long long *)addr;
-    unsigned long long old               = *addr_as_ull, assumed;
+    unsigned long long old                = *addr_as_ull, assumed;
     do {
         assumed = old;
-        old = atomicCAS(addr_as_ull, assumed, reinterpret_cast<int64_t&>(old) + val);
+        old     = atomicCAS(addr_as_ull, assumed, reinterpret_cast<int64_t &>(old) + val);
     } while (assumed != old);
 }
 
@@ -77,10 +120,10 @@ __device__ __inline__ void atomic_min(int64_t *addr, int64_t val)
         return;
 
     unsigned long long *const addr_as_ull = (unsigned long long *)addr;
-    unsigned long long old               = *addr_as_ull, assumed;
+    unsigned long long old                = *addr_as_ull, assumed;
     do {
         assumed = old;
-        if (reinterpret_cast<int64_t&>(assumed) <= val)
+        if (reinterpret_cast<int64_t &>(assumed) <= val)
             break;
         old = atomicCAS(addr_as_ull, assumed, val);
     } while (assumed != old);

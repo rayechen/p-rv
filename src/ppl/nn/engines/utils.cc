@@ -44,7 +44,7 @@ RetCode CopyBuffer(const BufferDesc& src_buf, const TensorShape& src_shape, cons
             return status;
         }
 
-        status = converter->Convert(&dst->GetBufferDesc(), dst->GetShape(), src_buf, src_shape);
+        status = converter->Convert(&dst->GetBufferDesc(), *dst->GetShape(), src_buf, src_shape);
         if (status != RC_SUCCESS) {
             LOG(ERROR) << "convert data to tensor[" << dst->GetName() << "] failed: " << GetRetCodeStr(status);
             return status;
@@ -56,7 +56,7 @@ RetCode CopyBuffer(const BufferDesc& src_buf, const TensorShape& src_shape, cons
         }
 
         BufferDesc tmp_buffer_desc;
-        auto status = tmp_cpu_device->Realloc(dst->GetShape(), &tmp_buffer_desc);
+        auto status = tmp_cpu_device->Realloc(*dst->GetShape(), &tmp_buffer_desc);
         if (status != RC_SUCCESS) {
             return status;
         }
@@ -66,7 +66,7 @@ RetCode CopyBuffer(const BufferDesc& src_buf, const TensorShape& src_shape, cons
         auto tmp_buffer = tmp_buffer_desc.addr;
 
         auto src_converter = src_dev->GetDataConverter();
-        status = src_converter->ConvertToHost(tmp_buffer, dst->GetShape(), src_buf, src_shape);
+        status = src_converter->ConvertToHost(tmp_buffer, *dst->GetShape(), src_buf, src_shape);
         if (status != RC_SUCCESS) {
             LOG(ERROR) << "copy data to host failed: " << GetRetCodeStr(status);
             return status;
@@ -91,32 +91,44 @@ RetCode CopyBuffer(const BufferDesc& src_buf, const TensorShape& src_shape, cons
 /* -------------------------------------------------------------------------- */
 
 RetCode GenericLoadConstant(edgeid_t eid, const ir::Constant& constant, const TensorShape& shape, Device* device,
-                            RuntimeConstantInfo* info) {
-    info->SetDevice(device);
+                            RuntimeConstantInfo* info, bool omit_data) {
     info->Reshape(shape);
 
-    auto status = info->ReallocBuffer();
-    if (status != RC_SUCCESS) {
-        LOG(ERROR) << "alloc buffer for constant failed: " << GetRetCodeStr(status);
-        return status;
-    }
+    if (!omit_data) {
+        info->SetDevice(device);
+        auto status = info->ReallocBuffer();
+        if (status != RC_SUCCESS) {
+            LOG(ERROR) << "alloc buffer for constant failed: " << GetRetCodeStr(status);
+            return status;
+        }
 
-    status = device->CopyFromHost(&info->GetBufferDesc(), constant.data.data(), shape);
-    if (status != RC_SUCCESS) {
-        LOG(ERROR) << "copy constant failed: " << GetRetCodeStr(status);
-        return status;
+        status = device->CopyFromHost(&info->GetBufferDesc(), constant.data.data(), shape);
+        if (status != RC_SUCCESS) {
+            LOG(ERROR) << "copy constant failed: " << GetRetCodeStr(status);
+            return status;
+        }
     }
 
     return RC_SUCCESS;
 }
 
-RetCode LoadConstants(const ir::Graph& graph, Device* device, map<edgeid_t, RuntimeConstantInfo>* constants) {
+RetCode LoadConstants(const ir::Graph& graph, Device* device, map<edgeid_t, RuntimeConstantInfo>* constants,
+                      const std::set<edgeid_t>* data_omitted_constants) {
     auto topo = graph.topo.get();
     auto graph_data = graph.data.get();
 
-    for (auto x = graph_data->constants.begin(); x != graph_data->constants.end(); ++x) {
-        auto eid = x->first;
+    for (uint32_t i = 0; i < topo->GetConstantCount(); ++i) {
+        auto eid = topo->GetConstant(i);
         auto edge = topo->GetEdgeById(eid);
+        if (edge == nullptr) {
+            LOG(ERROR) << "cannot get edge of constant[edgeid=" << eid << "]";
+            return RC_NOT_FOUND;
+        }
+
+        auto ret_pair = constants->insert(make_pair(eid, RuntimeConstantInfo()));
+        if (!ret_pair.second) {
+            continue;
+        }
 
         auto shape_ref = graph_data->shapes.find(eid);
         if (shape_ref == graph_data->shapes.end()) {
@@ -127,14 +139,23 @@ RetCode LoadConstants(const ir::Graph& graph, Device* device, map<edgeid_t, Runt
         TensorShape tensor_shape;
         utils::IrShape2TensorShape(shape_ref->second, &tensor_shape);
 
-        RuntimeConstantInfo constant_info;
-        auto status = GenericLoadConstant(eid, x->second, tensor_shape, device, &constant_info);
+        auto constant_ref = graph_data->constants.find(eid);
+        if (constant_ref == graph_data->constants.end()) {
+            LOG(ERROR) << "cannot find data of constant[" << edge->GetName() << "]";
+            return RC_NOT_FOUND;
+        }
+
+        bool omit_data = false;
+        if (data_omitted_constants != nullptr) {
+            omit_data = (data_omitted_constants->find(eid) != data_omitted_constants->end());
+        }
+
+        RuntimeConstantInfo& constant_info = ret_pair.first->second;
+        auto status = GenericLoadConstant(eid, constant_ref->second, tensor_shape, device, &constant_info, omit_data);
         if (status != RC_SUCCESS) {
             LOG(ERROR) << "load constant[" << edge->GetName() << "] failed: " << GetRetCodeStr(status);
             return status;
         }
-
-        constants->emplace(eid, std::move(constant_info));
     }
 
     return RC_SUCCESS;

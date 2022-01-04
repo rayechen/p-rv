@@ -29,12 +29,13 @@ public:
     X86Engine();
     ppl::common::RetCode Init(const X86EngineOptions&);
     ppl::common::RetCode Configure(uint32_t, ...) override;
-    EngineContext* CreateEngineContext(const std::string& graph_name) override;
+    EngineContext* CreateEngineContext() override;
     bool Supports(const ir::Node*) const override;
     ppl::common::RetCode ProcessGraph(utils::SharedResource*, ir::Graph*, RuntimePartitionInfo*) override;
 
 private:
     ppl::common::RetCode DoOptimize(ir::Graph*, utils::SharedResource*, RuntimePartitionInfo*);
+    ppl::common::RetCode CalDataOmittedConstants(const ir::Graph&, const RuntimePartitionInfo&, std::set<edgeid_t>*) const;
 
 private:
     /*

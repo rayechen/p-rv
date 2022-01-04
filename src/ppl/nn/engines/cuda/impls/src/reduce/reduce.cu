@@ -45,6 +45,15 @@ __global__ void CudaSetInitVal(
     if (tid >= size) return;
     output[tid] = initval;
 }
+__global__ void CudaSetInitVal(
+    int8_t* output,
+    int8_t initval,
+    int8_t size)
+{
+    int tid     = blockIdx.x * gridDim.x + threadIdx.y * blockDim.x + threadIdx.x;
+    if (tid >= size) return;
+    output[tid] = initval;
+}
 template <typename T>
 void SetInitVal(
     void* output,
@@ -133,6 +142,9 @@ ppl::common::RetCode PPLCUDAReduceForwardImp(
 #define CASEINT64(Mode, OP, Tin, Tout, Tacc) \
     case Mode:                              \
         return PPLCUDAReduceOPImp<OP<Tin, Tout, Tacc>>(stream, param, des, input_shape, input, output_shape, output);
+#define CASEINT8(Mode, OP, Tin, Tout, Tacc) \
+    case Mode:                              \
+        return PPLCUDAReduceOPImp<OP<Tin, Tout, Tacc>>(stream, param, des, input_shape, input, output_shape, output);
 
     if (input_shape->GetDataType() == ppl::common::DATATYPE_FLOAT16) {
         switch (param) {
@@ -161,6 +173,16 @@ ppl::common::RetCode PPLCUDAReduceForwardImp(
             CASEINT64(ReduceMean, SumOp, int64_t, int64_t, int64_t)
             CASEINT64(ReduceMax, MaxOp, int64_t, int64_t, int64_t)
             CASEINT64(ReduceMin, MinOp, int64_t, int64_t, int64_t)
+            default:
+                return ppl::common::RC_UNSUPPORTED;
+        }
+    } else if (input_shape->GetDataType() == ppl::common::DATATYPE_INT8) {
+        switch (param) {
+            CASEINT8(ReduceSum, SumOp, int8_t, int8_t, int8_t)
+            CASEINT8(ReduceProd, ProdOp, int8_t, int8_t, int8_t)
+            CASEINT8(ReduceMean, SumOp, int8_t, int8_t, int8_t)
+            CASEINT8(ReduceMax, MaxOp, int8_t, int8_t, int8_t)
+            CASEINT8(ReduceMin, MinOp, int8_t, int8_t, int8_t)
             default:
                 return ppl::common::RC_UNSUPPORTED;
         }

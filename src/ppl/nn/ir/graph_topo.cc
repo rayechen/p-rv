@@ -16,11 +16,31 @@
 // under the License.
 
 #include "ppl/nn/ir/graph_topo.h"
+#include "ppl/nn/ir/utils.h"
 #include "ppl/nn/utils/vector_utils.h"
+#include <queue>
 using namespace std;
 using namespace ppl::common;
 
 namespace ppl { namespace nn { namespace ir {
+
+static Node* FindNode(const ir::GraphTopo* topo, const string& name) {
+    for (auto it = topo->CreateNodeIter(); it->IsValid(); it->Forward()) {
+        auto node = it->Get();
+        if (node->GetName() == name) {
+            return node;
+        }
+    }
+    return nullptr;
+}
+
+Node* GraphTopo::GetNodeByName(const string& name) {
+    return FindNode(this, name);
+}
+
+const Node* GraphTopo::GetNodeByName(const string& name) const {
+    return FindNode(this, name);
+}
 
 static edgeid_t FindEdgeId(const string& name, const vector<edgeid_t>& edge_ids, const GraphTopo* topo) {
     for (uint32_t i = 0; i < edge_ids.size(); ++i) {
@@ -194,50 +214,67 @@ vector<nodeid_t> GraphTopo::FindSuccessors(nodeid_t nid) const {
     return res;
 }
 
-struct NodeItem {
-    NodeItem(nodeid_t nid = INVALID_NODEID, bool r = false) : id(nid), resolved(r) {}
-    nodeid_t id;
-    bool resolved;
-};
+set<nodeid_t> GraphTopo::FindAncestors(nodeid_t nid) const {
+    set<nodeid_t> dedup;
+    queue<nodeid_t> q;
 
-void GraphTopo::TopologicalSort(const function<void(nodeid_t)>& callback) const {
-    vector<NodeItem> node_stack;
-    vector<bool> node_is_valid(GetMaxNodeId(), false);
+    q.push(nid);
+    while (!q.empty()) {
+        nid = q.front();
+        q.pop();
+        auto node = GetNodeById(nid);
 
-    node_stack.reserve(GetMaxNodeId());
-    for (auto it = CreateNodeIter(); it->IsValid(); it->Forward()) {
-        auto nid = it->Get()->GetId();
-        node_is_valid[nid] = true;
-        node_stack.push_back(NodeItem(nid, false));
-    }
-
-    vector<bool> node_is_visited(GetMaxNodeId(), false);
-
-    while (!node_stack.empty()) {
-        auto item = node_stack.back();
-        node_stack.pop_back();
-
-        auto nid = item.id;
-        if (item.resolved) {
-            callback(nid);
-            continue;
+        for (uint32_t i = 0; i < node->GetInputCount(); ++i) {
+            auto eid = node->GetInput(i);
+            if (eid != INVALID_EDGEID) {
+                auto edge = GetEdgeById(eid);
+                auto pid = edge->GetProducer();
+                if (pid != INVALID_NODEID) {
+                    auto ret_pair = dedup.insert(pid);
+                    if (ret_pair.second) {
+                        q.push(pid);
+                    }
+                }
+            }
         }
 
-        if (node_is_visited[nid]) {
-            continue;
-        }
-
-        node_is_visited[nid] = true;
-        item.resolved = true;
-        node_stack.push_back(item);
-
-        auto prev_ids = FindPredecessors(item.id);
-        for (auto it = prev_ids.begin(); it != prev_ids.end(); ++it) {
-            if (node_is_valid[*it]) {
-                node_stack.push_back(NodeItem(*it, false));
+        for (uint32_t i = 0; i < node->GetExtraInputCount(); ++i) {
+            auto eid = node->GetExtraInput(i);
+            if (eid != INVALID_EDGEID) {
+                auto edge = GetEdgeById(eid);
+                auto pid = edge->GetProducer();
+                if (pid != INVALID_NODEID) {
+                    auto ret_pair = dedup.insert(pid);
+                    if (ret_pair.second) {
+                        q.push(pid);
+                    }
+                }
             }
         }
     }
+
+    return dedup;
+}
+
+void GraphTopo::TopologicalSort(const function<void(nodeid_t)>& callback) const {
+    auto node_iter = CreateNodeIter();
+    utils::Dfs(
+        GetMaxNodeId(),
+        [&node_iter]() -> nodeid_t {
+            if (node_iter->IsValid()) {
+                auto ret = node_iter->Get();
+                node_iter->Forward();
+                return ret->GetId();
+            }
+            return INVALID_NODEID;
+        },
+        [this](nodeid_t nid, const function<void(nodeid_t)>& f) -> void {
+            auto prevs = this->FindPredecessors(nid);
+            for (auto x = prevs.begin(); x != prevs.end(); ++x) {
+                f(*x);
+            }
+        },
+        callback);
 }
 
 }}} // namespace ppl::nn::ir

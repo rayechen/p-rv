@@ -29,7 +29,7 @@ using namespace ppl::common;
 namespace ppl { namespace nn { namespace riscv {
 
 ConvOp::~ConvOp() {
-    if(conv2d_param_ != nullptr) {
+    if (conv2d_param_ != nullptr) {
         if (conv2d_param_->mgr != nullptr) {
             conv2d_param_->mgr->release_cvt_weights();
             delete conv2d_param_->mgr;
@@ -64,13 +64,10 @@ ppl::common::RetCode ConvOp::SelectAlgorithm(const InputOutputInfo& info, const 
     }
 }
 
-RetCode ConvOp::SelectFormat(const InputOutputInfo& info,
-                             vector<dataformat_t>* selected_input_formats,
+RetCode ConvOp::SelectFormat(const InputOutputInfo& info, vector<dataformat_t>* selected_input_formats,
                              vector<dataformat_t>* selected_output_formats) {
-
-    if (conv2d_param_ &&
-            conv2d_param_->mgr &&
-            conv2d_param_->mgr-> algo_info().algo_type != ppl::kernel::riscv::conv2d_common_algo::unknown) {
+    if (conv2d_param_ && conv2d_param_->mgr &&
+        conv2d_param_->mgr->algo_info().algo_type != ppl::kernel::riscv::conv2d_common_algo::unknown) {
         selected_input_formats->at(0) = conv2d_param_->mgr->algo_info().input_format;
         selected_output_formats->at(0) = conv2d_param_->mgr->algo_info().output_format;
         return RC_SUCCESS;
@@ -79,24 +76,15 @@ RetCode ConvOp::SelectFormat(const InputOutputInfo& info,
 }
 
 ppl::common::RetCode ConvOp::SelectDataType(const InputOutputInfo& info,
-                            std::vector<ppl::common::datatype_t>* selected_input_data_types,
-                            std::vector<ppl::common::datatype_t>* selected_output_data_types) {
-    if (!conv2d_param_) {
-        return RC_INVALID_VALUE;
+                                            std::vector<ppl::common::datatype_t>* selected_input_data_types,
+                                            std::vector<ppl::common::datatype_t>* selected_output_data_types) {
+    if (conv2d_param_ && conv2d_param_->mgr &&
+        conv2d_param_->mgr->algo_info().algo_type != ppl::kernel::riscv::conv2d_common_algo::unknown) {
+        selected_input_data_types->at(0) = conv2d_param_->mgr->algo_info().input_data_type;
+        selected_output_data_types->at(0) = conv2d_param_->mgr->algo_info().output_data_type;
+        return RC_SUCCESS;
     }
-    
-    auto &mgr = conv2d_param_->mgr;
-    if (!mgr) {
-        return RC_INVALID_VALUE;
-    }
-
-    if (mgr->algo_info().algo_type == ppl::kernel::riscv::conv2d_common_algo::unknown) {
-        return RC_INVALID_VALUE;
-    }
-
-    selected_input_data_types->at(0) = mgr->algo_info().input_data_type;
-    selected_output_data_types->at(0) = mgr->algo_info().output_data_type;
-    return RC_SUCCESS;                    
+    return RC_INVALID_VALUE;
 }
 
 KernelImpl* ConvOp::CreateKernelImpl() const {

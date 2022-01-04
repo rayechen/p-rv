@@ -42,13 +42,6 @@ RetCode TransposeOp::Init(const OptKernelOptions& options) {
 
 RetCode TransposeOp::SelectFormat(const InputOutputInfo& info, vector<dataformat_t>* selected_input_formats,
                                   vector<dataformat_t>* selected_output_formats) {
-    // if (info.GetInput<TensorImpl>(0)->GetShape().GetDataFormat() ==
-    //         DATAFORMAT_N16CX && // actually change N16CHW -> NHWC
-    //     info.GetInput<TensorImpl>(0)->GetShape().GetDataType() == DATATYPE_FLOAT32 &&
-    //     param_->perm == std::vector<int32_t>{0, 2, 3, 1} && param_->reverse == false) {
-    //     selected_input_formats->at(0) = DATAFORMAT_N16CX;
-    //     selected_output_formats->at(0) = DATAFORMAT_NDARRAY;
-    // }
     selected_input_formats->at(0) = DATAFORMAT_NDARRAY;
     selected_output_formats->at(0) = DATAFORMAT_NDARRAY;
 
@@ -57,9 +50,12 @@ RetCode TransposeOp::SelectFormat(const InputOutputInfo& info, vector<dataformat
 
 RetCode TransposeOp::SelectDataType(const InputOutputInfo& info, vector<dataformat_t>* selected_input_data_types,
                                     vector<dataformat_t>* selected_output_data_types) {
-    selected_input_data_types->at(0) = DATATYPE_FLOAT16;
-    selected_output_data_types->at(0) = DATATYPE_FLOAT16;
-    
+    if (DATATYPE_FLOAT16 == selected_input_data_types->at(0)) {
+        selected_output_data_types->at(0) = DATATYPE_FLOAT16;
+    } else if (DATATYPE_FLOAT32 == selected_input_data_types->at(0)) {
+        selected_output_data_types->at(0) = DATATYPE_FLOAT32;
+    }
+
     return RC_SUCCESS;
 }
 

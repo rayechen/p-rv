@@ -25,7 +25,7 @@ using namespace ppl::common;
 
 namespace ppl { namespace nn { namespace riscv {
 
-RetCode RISCVKernel::BeforeExecute(KernelExecContext* ctx) {
+RetCode RiscvKernel::BeforeExecute(KernelExecContext* ctx) {
     auto status = Reshape(ctx);
     if (status != RC_SUCCESS) {
         LOG(ERROR) << "reshape kernel[" << GetName() << "] failed: " << GetRetCodeStr(status);
@@ -53,17 +53,17 @@ RetCode RISCVKernel::BeforeExecute(KernelExecContext* ctx) {
     return RC_SUCCESS;
 }
 
-bool RISCVKernel::CanDoExecute(const KernelExecContext& ctx) const {
+bool RiscvKernel::CanDoExecute(const KernelExecContext& ctx) const {
     for (uint32_t i = 0; i < ctx.GetInputCount(); ++i) {
         auto tensor = ctx.GetInput<TensorImpl>(i);
-        if (!tensor || tensor->GetShape().GetBytesIncludingPadding() == 0) {
+        if (!tensor || tensor->GetShape()->GetBytesIncludingPadding() == 0) {
             return false;
         }
     }
     return true;
 }
 
-RetCode RISCVKernel::Execute(KernelExecContext* ctx) {
+RetCode RiscvKernel::Execute(KernelExecContext* ctx) {
 #ifdef PPLNN_ENABLE_KERNEL_PROFILING
     utils::CpuTimingGuard __timing_guard__(&begin_ts_, &end_ts_, ctx->IsProfilingEnabled());
 #endif

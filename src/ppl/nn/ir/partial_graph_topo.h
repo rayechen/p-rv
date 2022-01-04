@@ -40,6 +40,12 @@ public:
         bool IsValid() const override {
             return idx_ < vec_->size();
         }
+        void Reset() override {
+            idx_ = 0;
+            while (idx_ < vec_->size() && !vec_->at(idx_)) {
+                ++idx_;
+            }
+        }
         T* Get() override {
             return vec_->at(idx_);
         }
@@ -68,7 +74,7 @@ public:
        @param parent parent graph which this partial graph belongs to
        @param nodes nodes of this partial graph
     */
-    PartialGraphTopo(GraphTopo* parent, const std::vector<nodeid_t>& nodes);
+    PartialGraphTopo(GraphTopo* parent, const std::string& name, const std::vector<nodeid_t>& nodes);
 
     // ----- //
 

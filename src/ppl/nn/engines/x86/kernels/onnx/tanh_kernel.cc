@@ -21,27 +21,30 @@
 namespace ppl { namespace nn { namespace x86 {
 
 ppl::common::RetCode TanhKernel::DoExecute(KernelExecContext* ctx) {
-    auto input = ctx->GetInput<TensorImpl>(0);
-    auto output = ctx->GetOutput<TensorImpl>(0);
+    PPLNN_X86_REQUIRED_INPUT(input, 0);
+    PPLNN_X86_REQUIRED_OUTPUT(output, 0);
 
     PPLNN_X86_DEBUG_TRACE("Op: %s\n", GetName().c_str());
     PPLNN_X86_DEBUG_TRACE("Input [input]:\n");
     PPL_X86_TENSOR_PRINT_DEBUG_MSG(input);
-    PPLNN_X86_DEBUG_TRACE("Output [output]:\n");
-    PPL_X86_TENSOR_PRINT_DEBUG_MSG(output);
+
     PPLNN_X86_DEBUG_TRACE("isa: %u\n", GetISA());
 
-    const auto data_type = input->GetShape().GetDataType();
+    PPLNN_X86_REALLOC_TENSOR_BUFFER(output);
+    PPLNN_X86_DEBUG_TRACE("Output [output]:\n");
+    PPL_X86_TENSOR_PRINT_DEBUG_MSG(output);
+
+    const auto data_type = input->GetShape()->GetDataType();
 
     if (data_type == ppl::common::DATATYPE_FLOAT32) {
         if (MayUseISA(ppl::common::ISA_X86_FMA)) {
-            return ppl::kernel::x86::tanh_fp32_fma(&input->GetShape(), input->GetBufferPtr<float>(),
+            return ppl::kernel::x86::tanh_fp32_fma(input->GetShape(), input->GetBufferPtr<float>(),
                                                    output->GetBufferPtr<float>());
         } else if (MayUseISA(ppl::common::ISA_X86_SSE)) {
-            return ppl::kernel::x86::tanh_fp32_sse(&input->GetShape(), input->GetBufferPtr<float>(),
+            return ppl::kernel::x86::tanh_fp32_sse(input->GetShape(), input->GetBufferPtr<float>(),
                                                    output->GetBufferPtr<float>());
         } else {
-            return ppl::kernel::x86::tanh_fp32(&input->GetShape(), input->GetBufferPtr<float>(),
+            return ppl::kernel::x86::tanh_fp32(input->GetShape(), input->GetBufferPtr<float>(),
                                                output->GetBufferPtr<float>());
         }
     } else {

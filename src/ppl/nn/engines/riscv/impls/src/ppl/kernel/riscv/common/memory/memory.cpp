@@ -21,12 +21,7 @@
 
 namespace ppl { namespace kernel { namespace riscv {
 
-ppl::common::RetCode memory_init(
-    const void *src,
-    const uint64_t sizeof_elem,
-    const uint64_t num_elements,
-    void* dst)
-{
+ppl::common::RetCode memory_init(const void* src, const uint64_t sizeof_elem, const uint64_t num_elements, void* dst) {
     if (sizeof_elem == 1) {
         const uint8_t val = ((uint8_t*)src)[0];
         for (uint64_t i = 0; i < num_elements; i++) {
@@ -58,11 +53,7 @@ ppl::common::RetCode memory_init(
     return ppl::common::RC_SUCCESS;
 }
 
-ppl::common::RetCode memory_copy(
-    const void *src,
-    const uint64_t num_bytes,
-    void* dst)
-{
+ppl::common::RetCode memory_copy(const void* src, const uint64_t num_bytes, void* dst) {
     memcpy((uint8_t*)dst, (uint8_t*)src, num_bytes);
     return ppl::common::RC_SUCCESS;
 }

@@ -24,15 +24,9 @@
 
 namespace ppl { namespace nn { namespace utils {
 
-class GenericCpuDevice : public Device {
+class GenericCpuDevice final : public Device {
 public:
     GenericCpuDevice(uint64_t alignment = 64) : allocator_(alignment) {}
-    virtual ~GenericCpuDevice() {}
-
-    /** @brief get the underlying allocator used to allocate/free memories */
-    ppl::common::Allocator* GetAllocator() const {
-        return &allocator_;
-    }
 
     ppl::common::RetCode Realloc(uint64_t bytes, BufferDesc*) override;
     ppl::common::RetCode Realloc(const TensorShape&, BufferDesc*) override final;
@@ -48,6 +42,14 @@ public:
 
     const DataConverter* GetDataConverter() const override {
         return &data_converter_;
+    }
+
+    const char* GetType() const override {
+        return "cpu";
+    }
+
+    ppl::common::RetCode Configure(uint32_t, ...) override {
+        return ppl::common::RC_UNSUPPORTED;
     }
 
 private:

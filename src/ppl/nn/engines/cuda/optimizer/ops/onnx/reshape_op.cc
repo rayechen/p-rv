@@ -27,21 +27,21 @@ using namespace ppl::common;
 namespace ppl { namespace nn { namespace cuda {
 
 RetCode ReshapeOp::Init(const OptKernelOptions& options) {
-    infer_type_func_ = [this](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
+    infer_type_func_ = [](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
         ppl::common::RetCode status;
         if (type == DATATYPE_UNKNOWN) {
             status = InferInheritedType(info);
         } else if (type == DATATYPE_INT8) {
-            status = CopyQuantType(info, quant);
+            status = UnifyToOutputQuant(info, quant);
         } else {
             status = InferDefaultType(info, type);
         }
-        auto shape = &info->GetInput<TensorImpl>(1)->GetShape();
+        auto shape = info->GetInput<TensorImpl>(1)->GetShape();
         shape->SetDataType(DATATYPE_INT64);
         return status;
     };
 
-    infer_dims_func_ = [this](InputOutputInfo* info) -> RetCode {
+    infer_dims_func_ = [](InputOutputInfo* info) -> RetCode {
         if (info->GetInputCount() != 2) {
             LOG(ERROR) << "2 input required.";
             return RC_INVALID_VALUE;
@@ -52,7 +52,7 @@ RetCode ReshapeOp::Init(const OptKernelOptions& options) {
             return RC_NOT_FOUND;
         }
 
-        const TensorShape& dst_desc = input->GetShape();
+        const TensorShape& dst_desc = *input->GetShape();
         unique_ptr<int64_t[]> shape_data(new int64_t[dst_desc.GetElementsIncludingPadding()]);
         auto status = input->CopyToHost(shape_data.get());
         if (status != RC_SUCCESS) {

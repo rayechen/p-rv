@@ -27,15 +27,19 @@ ppl::common::RetCode MMCVGridSampleKernel::DoExecute(KernelExecContext* ctx) {
     auto output = ctx->GetOutput<TensorImpl>(0);
 
     PPLNN_X86_DEBUG_TRACE("Op: %s\n", GetName().c_str());
+
     PPLNN_X86_DEBUG_TRACE("Input [input]:\n");
     PPL_X86_TENSOR_PRINT_DEBUG_MSG(input);
     PPLNN_X86_DEBUG_TRACE("Input [grid]:\n");
     PPL_X86_TENSOR_PRINT_DEBUG_MSG(grid);
-    PPLNN_X86_DEBUG_TRACE("Output [output]:\n");
-    PPL_X86_TENSOR_PRINT_DEBUG_MSG(output);
+
     PPLNN_X86_DEBUG_TRACE("align_corners: %ld\n", param_->align_corners);
     PPLNN_X86_DEBUG_TRACE("interpolation_mode: %ld\n", param_->interpolation_mode);
     PPLNN_X86_DEBUG_TRACE("padding_mode: %ld\n", param_->padding_mode);
+
+    PPLNN_X86_REALLOC_TENSOR_BUFFER(output);
+    PPLNN_X86_DEBUG_TRACE("Output [output]:\n");
+    PPL_X86_TENSOR_PRINT_DEBUG_MSG(output);
 
     if (param_->interpolation_mode == 0) { // bilinear
         if (false) {
@@ -43,13 +47,13 @@ ppl::common::RetCode MMCVGridSampleKernel::DoExecute(KernelExecContext* ctx) {
 #ifdef PPL_USE_X86_AVX512
         else if (MayUseISA(ppl::common::ISA_X86_AVX512)) {
             return kernel::x86::mmcv_gridsample_linear_ndarray_fp32_avx512(
-                &input->GetShape(), &grid->GetShape(), input->GetBufferPtr<float>(), grid->GetBufferPtr<float>(),
+                input->GetShape(), grid->GetShape(), input->GetBufferPtr<float>(), grid->GetBufferPtr<float>(),
                 param_->align_corners, param_->padding_mode, output->GetBufferPtr<float>());
         }
 #endif
         else {
             return kernel::x86::mmcv_gridsample_linear_ndarray_fp32(
-                &input->GetShape(), &grid->GetShape(), input->GetBufferPtr<float>(), grid->GetBufferPtr<float>(),
+                input->GetShape(), grid->GetShape(), input->GetBufferPtr<float>(), grid->GetBufferPtr<float>(),
                 param_->align_corners, param_->padding_mode, output->GetBufferPtr<float>());
         }
     }

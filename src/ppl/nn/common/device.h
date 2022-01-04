@@ -22,12 +22,13 @@
 #include "ppl/common/allocator.h"
 #include "ppl/nn/common/tensor_shape.h"
 #include "ppl/nn/common/buffer_desc.h"
+#include "ppl/nn/common/device_context.h"
 #include "ppl/nn/common/data_converter.h"
 #include "ppl/nn/common/types.h"
 
 namespace ppl { namespace nn {
 
-class Device {
+class Device : public DeviceContext {
 public:
     virtual ~Device() {}
 

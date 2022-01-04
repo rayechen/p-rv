@@ -33,9 +33,9 @@ static inline int64_t GenRandDim() {
 class TensorImplTest : public testing::Test {
 protected:
     void SetUp() override {
-        builder_.AddNode("a", ir::Node::Type("test", "op1"), {"input_of_a"}, {"output_of_a"});
-        builder_.AddNode("b", ir::Node::Type("test", "op2"), {"output_of_a"}, {"output_of_b"});
-        builder_.AddNode("c", ir::Node::Type("test", "op3"), {"output_of_b"}, {"output_of_c"});
+        builder_.AddNode("a", ir::Node::Type("test", "op1", 1), {"input_of_a"}, {"output_of_a"});
+        builder_.AddNode("b", ir::Node::Type("test", "op2", 1), {"output_of_a"}, {"output_of_b"});
+        builder_.AddNode("c", ir::Node::Type("test", "op1", 1), {"output_of_b"}, {"output_of_c"});
         builder_.Finalize();
     }
 
@@ -49,10 +49,10 @@ protected:
         EXPECT_EQ(EdgeObject::T_TENSOR, tensor.GetObjectType());
         EXPECT_EQ(edge->GetName(), tensor.GetName());
 
-        TensorShape& shape = tensor.GetShape();
-        shape.Reshape({1, 3, GenRandDim(), GenRandDim()});
-        shape.SetDataType(DATATYPE_FLOAT32);
-        shape.SetDataFormat(DATAFORMAT_NDARRAY);
+        auto shape = tensor.GetShape();
+        shape->Reshape({1, 3, GenRandDim(), GenRandDim()});
+        shape->SetDataType(DATATYPE_FLOAT32);
+        shape->SetDataFormat(DATAFORMAT_NDARRAY);
 
         EXPECT_EQ(RC_SUCCESS, tensor.SetDevice(&cpu_device_));
         EXPECT_EQ(&cpu_device_, tensor.GetDevice());
@@ -87,8 +87,8 @@ TEST_F(TensorImplTest, setbuffer) {
 
 TEST_F(TensorImplTest, SetAndGetBufferPtr) {
     auto tensor = ConstructFp32TensorWithCpuDevice();
-    auto& shape = tensor.GetShape();
-    auto nr_element = shape.GetElementsIncludingPadding();
+    auto shape = tensor.GetShape();
+    auto nr_element = shape->GetElementsIncludingPadding();
 
     vector<float> buf(nr_element);
     buf[0] = 1.234;

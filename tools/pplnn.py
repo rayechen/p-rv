@@ -83,9 +83,16 @@ def ParseCommandLineArgs():
                                 default = False, required = False)
             parser.add_argument("--device-id", type = int, dest = "device_id",
                                 default = 0, required = False, help = "specify which device is used.")
+            parser.add_argument("--import-algo-file", type = str, default = "", required = False,
+                                help = "a json file containing op implementations info")
+            parser.add_argument("--export-algo-file", type = str, default = "", required = False,
+                                help = "a json file used to store op implementations info")
 
     parser.add_argument("--onnx-model", type = str, default = "", required = False,
                         help = "onnx model file")
+
+    parser.add_argument("--mm-policy", type = str, default = "perf", required = False,
+                        help = "\"perf\" => better performance, or \"mem\" => less memory usage")
 
     parser.add_argument("--in-shapes", type = str, dest = "in_shapes",
                         default = "", required = False, help = "shapes of input tensors."
@@ -115,50 +122,6 @@ def ParseCommandLineArgs():
 
 # ---------------------------------------------------------------------------- #
 
-def RegisterEngines(args):
-    engines = []
-    if args.use_x86:
-        x86_options = pplnn.X86EngineOptions()
-        x86_engine = pplnn.X86EngineFactory.Create(x86_options)
-        if not x86_engine:
-            logging.error("create x86 engine failed.")
-            sys.exit(-1)
-
-        if args.disable_avx512:
-            status = x86_engine.Configure(pplnn.X86_CONF_DISABLE_AVX512)
-            if status != pplcommon.RC_SUCCESS:
-                logging.error("x86 engine Configure() failed: " + pplcommon.GetRetCodeStr(status))
-                sys.exit(-1)
-
-        if args.disable_avx_fma3:
-            status = x86_engine.Configure(pplnn.X86_CONF_DISABLE_AVX_FMA3)
-            if status != pplcommon.RC_SUCCESS:
-                logging.error("x86 engine Configure() failed: " + pplcommon.GetRetCodeStr(status))
-                sys.exit(-1)
-
-        engines.append(pplnn.Engine(x86_engine))
-
-    if args.use_cuda:
-        cuda_options = pplnn.CudaEngineOptions()
-        cuda_options.device_id = args.device_id
-
-        cuda_engine = pplnn.CudaEngineFactory.Create(cuda_options)
-        if not cuda_engine:
-            logging.error("create cuda engine failed.")
-            sys.exit(-1)
-
-        if args.quick_select:
-            status = cuda_engine.Configure(pplnn.CUDA_CONF_USE_DEFAULT_ALGORITHMS)
-            if status != pplcommon.RC_SUCCESS:
-                logging.error("cuda engine Configure() failed: " + pplcommon.GetRetCodeStr(status))
-                sys.exit(-1)
-
-        engines.append(pplnn.Engine(cuda_engine))
-
-    return engines
-
-# ---------------------------------------------------------------------------- #
-
 def ParseInShapes(in_shapes_str):
     ret = []
     shape_strs = list(filter(None, in_shapes_str.split(",")))
@@ -166,6 +129,92 @@ def ParseInShapes(in_shapes_str):
         dims = [int(d) for d in s.split("_")]
         ret.append(dims)
     return ret
+
+# ---------------------------------------------------------------------------- #
+
+def CreateX86Engine(args):
+    x86_options = pplnn.X86EngineOptions()
+    if args.mm_policy == "perf":
+        x86_options.mm_policy = pplnn.X86_MM_MRU
+    elif args.mm_policy == "mem":
+        x86_options.mm_policy = pplnn.X86_MM_COMPACT
+
+    x86_engine = pplnn.X86EngineFactory.Create(x86_options)
+    if not x86_engine:
+        logging.error("create x86 engine failed.")
+        sys.exit(-1)
+
+    if args.disable_avx512:
+        status = x86_engine.Configure(pplnn.X86_CONF_DISABLE_AVX512)
+        if status != pplcommon.RC_SUCCESS:
+            logging.error("x86 engine Configure() failed: " + pplcommon.GetRetCodeStr(status))
+            sys.exit(-1)
+
+    if args.disable_avx_fma3:
+        status = x86_engine.Configure(pplnn.X86_CONF_DISABLE_AVX_FMA3)
+        if status != pplcommon.RC_SUCCESS:
+            logging.error("x86 engine Configure() failed: " + pplcommon.GetRetCodeStr(status))
+            sys.exit(-1)
+
+    return x86_engine
+
+def CreateCudaEngine(args):
+    cuda_options = pplnn.CudaEngineOptions()
+    cuda_options.device_id = args.device_id
+    if args.mm_policy == "perf":
+        cuda_options.mm_policy = pplnn.CUDA_MM_BEST_FIT
+    elif args.mm_policy == "mem":
+        cuda_options.mm_policy = pplnn.CUDA_MM_COMPACT
+
+    cuda_engine = pplnn.CudaEngineFactory.Create(cuda_options)
+    if not cuda_engine:
+        logging.error("create cuda engine failed.")
+        sys.exit(-1)
+
+    if args.quick_select:
+        status = cuda_engine.Configure(pplnn.CUDA_CONF_USE_DEFAULT_ALGORITHMS)
+        if status != pplcommon.RC_SUCCESS:
+            logging.error("cuda engine Configure(CUDA_CONF_USE_DEFAULT_ALGORITHMS) failed: " + pplcommon.GetRetCodeStr(status))
+            sys.exit(-1)
+
+    if args.in_shapes:
+        shapes = ParseInShapes(args.in_shapes)
+        status = cuda_engine.Configure(pplnn.CUDA_CONF_SET_INPUT_DIMS, shapes)
+        if status != pplcommon.RC_SUCCESS:
+            logging.error("cuda engine Configure(CUDA_CONF_SET_INPUT_DIMS) failed: " + pplcommon.GetRetCodeStr(status))
+            sys.exit(-1)
+
+    if args.export_algo_file:
+        status = cuda_engine.Configure(pplnn.CUDA_CONF_EXPORT_ALGORITHMS, args.export_algo_file)
+        if status != pplcommon.RC_SUCCESS:
+            logging.error("cuda engine Configure(CUDA_CONF_EXPORT_ALGORITHMS) failed: " + pplcommon.GetRetCodeStr(status))
+            sys.exit(-1)
+
+    if args.import_algo_file:
+        # import and export from the same file
+        if args.import_algo_file == args.export_algo_file:
+            # try to create this file first
+            f = open(args.export_algo_file, "a")
+            f.close()
+
+        status = cuda_engine.Configure(pplnn.CUDA_CONF_IMPORT_ALGORITHMS, args.import_algo_file)
+        if status != pplcommon.RC_SUCCESS:
+            logging.error("cuda engine Configure(CUDA_CONF_IMPORT_ALGORITHMS) failed: " + pplcommon.GetRetCodeStr(status))
+            sys.exit(-1)
+
+    return cuda_engine
+
+def RegisterEngines(args):
+    engines = []
+    if args.use_x86:
+        x86_engine = CreateX86Engine(args)
+        engines.append(pplnn.Engine(x86_engine))
+
+    if args.use_cuda:
+        cuda_engine = CreateCudaEngine(args)
+        engines.append(pplnn.Engine(cuda_engine))
+
+    return engines
 
 # ---------------------------------------------------------------------------- #
 
@@ -279,19 +328,29 @@ def GenDimsStr(dims):
 
 # ---------------------------------------------------------------------------- #
 
+def CalcElementCount(dims):
+    count = 1
+    for d in dims:
+        count = count * d
+    return count
+
 def SaveInputsOneByOne(save_data_dir, runtime):
     for i in range(runtime.GetInputCount()):
         tensor = runtime.GetInputTensor(i)
         shape = tensor.GetShape()
-        tensor_data = tensor.ConvertToHost()
-        if not tensor_data:
-            logging.error("copy data from tensor[" + tensor.GetName() + "] failed.")
-            sys.exit(-1)
+        dims = shape.GetDims()
+        out_file_name = save_data_dir + "/pplnn_input_" + str(i) + "_" + tensor.GetName() + "-" + GenDimsStr(dims) + "-" + g_data_type_str[shape.GetDataType()] + ".dat"
+        element_count = CalcElementCount(dims)
+        if element_count > 0:
+            tensor_data = tensor.ConvertToHost()
+            if not tensor_data:
+                logging.error("copy data from tensor[" + tensor.GetName() + "] failed.")
+                sys.exit(-1)
 
-        in_data = np.array(tensor_data, copy=False)
-        in_data.tofile(save_data_dir + "/pplnn_input_" + str(i) + "_" +
-                       tensor.GetName() + "-" + GenDimsStr(shape.GetDims()) + "-" +
-                       g_data_type_str[shape.GetDataType()] + ".dat")
+            in_data = np.array(tensor_data, copy=False)
+            in_data.tofile(out_file_name)
+        else:
+            open(out_file_name, 'a').close()
 
 # ---------------------------------------------------------------------------- #
 
@@ -300,13 +359,16 @@ def SaveInputsAllInOne(save_data_dir, runtime):
     fd = open(out_file_name, mode="wb+")
     for i in range(runtime.GetInputCount()):
         tensor = runtime.GetInputTensor(i)
-        tensor_data = tensor.ConvertToHost()
-        if not tensor_data:
-            logging.error("copy data from tensor[" + tensor.GetName() + "] failed.")
-            sys.exit(-1)
+        dims = tensor.GetShape().GetDims()
+        element_count = CalcElementCount(dims)
+        if element_count > 0:
+            tensor_data = tensor.ConvertToHost()
+            if not tensor_data:
+                logging.error("copy data from tensor[" + tensor.GetName() + "] failed.")
+                sys.exit(-1)
 
-        in_data = np.array(tensor_data, copy=False)
-        fd.write(in_data.tobytes())
+            in_data = np.array(tensor_data, copy=False)
+            fd.write(in_data.tobytes())
     fd.close()
 
 # ---------------------------------------------------------------------------- #
@@ -314,21 +376,24 @@ def SaveInputsAllInOne(save_data_dir, runtime):
 def SaveOutputsOneByOne(save_data_dir, runtime):
     for i in range(runtime.GetOutputCount()):
         tensor = runtime.GetOutputTensor(i)
-        tensor_data = tensor.ConvertToHost()
-        if not tensor_data:
-            logging.error("copy data from tensor[" + tensor.GetName() + "] failed.")
-            sys.exit(-1)
+        out_file_name = save_data_dir + "/pplnn_output-" + tensor.GetName() + ".dat"
+        dims = tensor.GetShape().GetDims()
+        element_count = CalcElementCount(dims)
+        if element_count > 0:
+            tensor_data = tensor.ConvertToHost()
+            if not tensor_data:
+                logging.error("copy data from tensor[" + tensor.GetName() + "] failed.")
+                sys.exit(-1)
 
-        out_data = np.array(tensor_data, copy=False)
-        out_data.tofile(save_data_dir + "/pplnn_output-" + tensor.GetName() + ".dat")
+            out_data = np.array(tensor_data, copy=False)
+            out_data.tofile(out_file_name)
+        else:
+            open(out_file_name, 'a').close()
 
 # ---------------------------------------------------------------------------- #
 
 def CalcBytes(dims, item_size):
-    nbytes = item_size
-    for d in dims:
-        nbytes = nbytes * d
-    return nbytes
+    return item_size * CalcElementCount(dims)
 
 def PrintInputOutputInfo(runtime):
     logging.info("----- input info -----")
@@ -395,17 +460,19 @@ if __name__ == "__main__":
     else:
         SetRandomInputs(in_shapes, runtime)
 
+    for i in range(runtime.GetInputCount()):
+        tensor = runtime.GetInputTensor(i)
+        shape = tensor.GetShape()
+        if CalcElementCount(shape.GetDims()) == 0:
+            logging.error("input tensor[" + tensor.GetName() + "] is empty.")
+            sys.exit(-1)
+
     if args.save_input:
         SaveInputsAllInOne(args.save_data_dir, runtime)
     if args.save_inputs:
         SaveInputsOneByOne(args.save_data_dir, runtime)
 
     status = runtime.Run()
-    if status != pplcommon.RC_SUCCESS:
-        logging.error("Run() failed: " + pplcommon.GetRetCodeStr(status))
-        sys.exit(-1)
-
-    status = runtime.Sync()
     if status != pplcommon.RC_SUCCESS:
         logging.error("Run() failed: " + pplcommon.GetRetCodeStr(status))
         sys.exit(-1)

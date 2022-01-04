@@ -31,27 +31,27 @@
 
 namespace ppl { namespace nn { namespace riscv {
 
-class ConvOp final : public RISCVOptKernel {
+class ConvOp final : public RiscvOptKernel {
 public:
-    ConvOp(const ir::Node* node) : RISCVOptKernel(node), conv2d_param_(nullptr) {};
+    ConvOp(const ir::Node* node) : RiscvOptKernel(node), conv2d_param_(nullptr){};
     ~ConvOp();
     ppl::common::RetCode Init(const OptKernelOptions& options) override;
     KernelImpl* CreateKernelImpl() const override;
     ppl::common::RetCode SelectFormat(const InputOutputInfo& info,
-                            std::vector<ppl::common::dataformat_t>* selected_input_formats,
-                            std::vector<ppl::common::dataformat_t>* selected_output_formats) override;
+                                      std::vector<ppl::common::dataformat_t>* selected_input_formats,
+                                      std::vector<ppl::common::dataformat_t>* selected_output_formats) override;
     ppl::common::RetCode SelectDataType(const InputOutputInfo& info,
-                            std::vector<ppl::common::datatype_t>* selected_input_data_types,
-                            std::vector<ppl::common::datatype_t>* selected_output_data_types) override;
+                                        std::vector<ppl::common::datatype_t>* selected_input_data_types,
+                                        std::vector<ppl::common::datatype_t>* selected_output_data_types) override;
     ppl::common::RetCode SelectAlgorithm(const InputOutputInfo& info, const OptKernelOptions& options) override;
 
 private:
-    template<typename T>
+    template <typename T>
     void conv_op_graph_data_cvt(float* graph_data, std::vector<T>& cvt_data, int32_t data_len) {
         auto data_bytes = data_len * sizeof(T);
         cvt_data.resize(data_bytes);
         if (typeid(T) == typeid(__fp16)) {
-            CvtFp32ToFp16(data_len, graph_data, cvt_data.data());        
+            CvtFp32ToFp16(data_len, graph_data, cvt_data.data());
         } else if (typeid(T) == typeid(float)) {
             memcpy(cvt_data.data(), graph_data, data_bytes);
         } else {
@@ -59,12 +59,11 @@ private:
         }
     }
 
-    template<typename T>
-    ppl::kernel::riscv::conv2d_offline_manager<T> *conv_op_gen_algo(const ppl::kernel::riscv::conv2d_common_param &param,
-                                                                    const ppl::kernel::riscv::conv2d_common_algo_info &algo_info,
-                                                                    ppl::common::Allocator *allocator)
-    {
-        ppl::kernel::riscv::conv2d_base_offline_manager *offline_manager;
+    template <typename T>
+    ppl::kernel::riscv::conv2d_offline_manager<T>* conv_op_gen_algo(
+        const ppl::kernel::riscv::conv2d_common_param& param,
+        const ppl::kernel::riscv::conv2d_common_algo_info& algo_info, ppl::common::Allocator* allocator) {
+        ppl::kernel::riscv::conv2d_base_offline_manager* offline_manager;
         if (typeid(T) == typeid(__fp16)) {
             offline_manager = ppl::kernel::riscv::conv2d_fp16_algo_selector::gen_algo(param, algo_info, allocator);
         } else if (typeid(T) == typeid(float)) {
@@ -75,8 +74,9 @@ private:
         return (ppl::kernel::riscv::conv2d_offline_manager<T>*)(offline_manager);
     }
 
-    template<typename T>
-    ppl::kernel::riscv::conv2d_common_algo_info conv_op_select_algo(const ppl::nn::TensorShape& input_shape, const ppl::kernel::riscv::conv2d_common_param &param) {
+    template <typename T>
+    ppl::kernel::riscv::conv2d_common_algo_info conv_op_select_algo(
+        const ppl::nn::TensorShape& input_shape, const ppl::kernel::riscv::conv2d_common_param& param) {
         if (typeid(T) == typeid(__fp16)) {
             return ppl::kernel::riscv::conv2d_fp16_algo_selector::select_algo(input_shape, param);
         } else if (typeid(T) == typeid(float)) {
@@ -86,15 +86,14 @@ private:
         }
     }
 
-    template<typename T>
+    template <typename T>
     ppl::common::RetCode SelectAlgorithmGeneric(const InputOutputInfo& info, const OptKernelOptions& options) {
         auto node = GetNode();
         auto graph_data = options.graph_data;
 
-        
         auto weight_data_it = graph_data->constants.find(node->GetInput(1));
         if (weight_data_it == graph_data->constants.end()) {
-            LOG(INFO) << "ConvOp constant weight not found, will use conv runtime.";
+            LOG(DEBUG) << "ConvOp constant weight not found, will use conv runtime.";
             return ppl::common::RC_SUCCESS;
         }
 
@@ -108,7 +107,7 @@ private:
         if (node->GetInputCount() == 3) {
             auto bias_data_it = graph_data->constants.find(node->GetInput(2));
             if (bias_data_it == graph_data->constants.end()) {
-                LOG(INFO) << "ConvOp constant weight not found, will use conv runtime.";
+                LOG(DEBUG) << "ConvOp constant weight not found, will use conv runtime.";
                 return ppl::common::RC_SUCCESS;
             }
             bias_data = (float*)bias_data_it->second.data.data();
@@ -152,35 +151,31 @@ private:
                 conv2d_kernel_param.group = conv_param.group;
                 conv2d_kernel_param.num_output = conv_param.num_output;
                 conv2d_kernel_param.channels = conv_param.channels;
-                //conv2d_kernel_param.fuse_flag = 0;
+                // conv2d_kernel_param.fuse_flag = 0;
 
-                auto algo_info = conv_op_select_algo<T>(
-                    info.GetInput<TensorImpl>(0)->GetShape(),
-                    conv2d_param_->param
-                );
+                auto algo_info = conv_op_select_algo<T>(*info.GetInput<TensorImpl>(0)->GetShape(), conv2d_param_->param);
 
                 if (algo_info.algo_type == ppl::kernel::riscv::conv2d_common_algo::unknown) {
                     LOG(ERROR) << "Conv select algorithm failed, use fallback kernel";
                     return ppl::common::RC_UNSUPPORTED;
                 }
 
-                ppl::kernel::riscv::conv2d_offline_manager<T> *mgr = conv_op_gen_algo<T>(
-                    conv2d_param_->param,
-                    algo_info,
-                    options.device->GetAllocator());
+                ppl::kernel::riscv::conv2d_offline_manager<T>* mgr =
+                    conv_op_gen_algo<T>(conv2d_param_->param, algo_info, options.device->GetAllocator());
                 {
                     if (nullptr == mgr) {
                         return ppl::common::RC_UNSUPPORTED;
                     }
 
                     mgr->fast_init_tunning_param();
-                    if (options.engine_options->tune_param_flag){
-                        auto& src_shape = info.GetInput<TensorImpl>(0)->GetShape();
-                        auto& dst_shape = info.GetOutput<TensorImpl>(0)->GetShape();
+                    if (options.engine_options->tune_param_flag) {
+                        auto& src_shape = *info.GetInput<TensorImpl>(0)->GetShape();
+                        auto& dst_shape = *info.GetOutput<TensorImpl>(0)->GetShape();
                         std::vector<T> tunning_src, tunning_dst;
                         tunning_src.resize(src_shape.GetElementsIncludingPadding());
                         tunning_dst.resize(dst_shape.GetElementsIncludingPadding());
-                        mgr->pick_best_tunning_param(tunning_src.data(), weight_data_cvt.data(), tunning_dst.data(), src_shape, dst_shape);
+                        mgr->pick_best_tunning_param(tunning_src.data(), weight_data_cvt.data(), tunning_dst.data(),
+                                                     src_shape, dst_shape);
                     }
 
                     if (bias_data != nullptr) {
@@ -201,7 +196,7 @@ private:
 
         return ppl::common::RC_SUCCESS;
     }
-    
+
 private:
     Convolution2DParam* conv2d_param_;
     std::shared_ptr<ppl::nn::common::ConvolutionParam> param_;

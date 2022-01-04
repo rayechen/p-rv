@@ -20,42 +20,17 @@
 
 #include "../engines/py_engine.h"
 #include "ppl/nn/runtime/runtime.h"
-#include "py_tensor.h"
 #include <memory>
 
 namespace ppl { namespace nn { namespace python {
 
-class PyRuntime final {
-public:
-    PyRuntime(const std::vector<PyEngine>& engines, Runtime* runtime) : engines_(engines), runtime_(runtime) {}
+struct PyRuntime final {
+    PyRuntime(const std::vector<PyEngine>& e, Runtime* r) : engines(e), ptr(r) {}
     PyRuntime(PyRuntime&&) = default;
     PyRuntime& operator=(PyRuntime&&) = default;
 
-    Runtime* GetPtr() const {
-        return runtime_.get();
-    }
-    uint32_t GetInputCount() const {
-        return runtime_->GetInputCount();
-    }
-    PyTensor GetInputTensor(uint32_t idx) const {
-        return PyTensor(runtime_->GetInputTensor(idx));
-    }
-    ppl::common::RetCode Run() {
-        return runtime_->Run();
-    }
-    ppl::common::RetCode Sync() {
-        return runtime_->Sync();
-    }
-    uint32_t GetOutputCount() const {
-        return runtime_->GetOutputCount();
-    }
-    PyTensor GetOutputTensor(uint32_t idx) const {
-        return PyTensor(runtime_->GetOutputTensor(idx));
-    }
-
-private:
-    std::vector<PyEngine> engines_; // retain engines
-    std::unique_ptr<Runtime> runtime_;
+    std::vector<PyEngine> engines; // retain engines
+    std::unique_ptr<Runtime> ptr;
 };
 
 }}} // namespace ppl::nn::python

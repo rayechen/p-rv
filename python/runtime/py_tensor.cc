@@ -16,6 +16,7 @@
 // under the License.
 
 #include "py_tensor.h"
+#include "../common/py_device_context.h"
 #include "ppl/nn/common/logger.h"
 #include <map>
 using namespace std;
@@ -46,8 +47,8 @@ RetCode PyTensor::ConvertFromHost(const pybind11::buffer& b) {
         dims[i] = info.shape[i];
     }
 
-    TensorShape& shape = tensor_->GetShape();
-    shape.Reshape(dims);
+    auto shape = tensor_->GetShape();
+    shape->Reshape(dims);
 
     auto ref = g_format2datatype.find(info.format);
     if (ref == g_format2datatype.end()) {
@@ -58,13 +59,13 @@ RetCode PyTensor::ConvertFromHost(const pybind11::buffer& b) {
     LOG(DEBUG) << "data type of input for tensor[" << tensor_->GetName() << "] is [" << GetDataTypeStr(data_type)
                << "].";
 
-    TensorShape src_shape = shape;
+    TensorShape src_shape = *shape;
     src_shape.SetDataFormat(DATAFORMAT_NDARRAY);
     src_shape.SetDataType(data_type);
 
     auto status = tensor_->ReallocBuffer();
     if (status != RC_SUCCESS) {
-        LOG(ERROR) << "realloc buffer of [" << shape.GetBytesIncludingPadding()
+        LOG(ERROR) << "realloc buffer of [" << shape->GetBytesIncludingPadding()
                    << "] bytes failed when setting data for tensor[" << tensor_->GetName()
                    << "]: " << GetRetCodeStr(status);
         return status;
@@ -81,11 +82,11 @@ RetCode PyTensor::ConvertFromHost(const pybind11::buffer& b) {
 
 PyNdArray PyTensor::ConvertToHost() const {
     PyNdArray arr;
-    if (tensor_->GetShape().GetBytesExcludingPadding() == 0) {
+    if (tensor_->GetShape()->GetBytesExcludingPadding() == 0) {
         return arr;
     }
 
-    TensorShape dst_shape = tensor_->GetShape();
+    TensorShape dst_shape = *tensor_->GetShape();
     dst_shape.SetDataFormat(DATAFORMAT_NDARRAY);
 
     arr.data.resize(dst_shape.GetBytesExcludingPadding());
@@ -126,6 +127,10 @@ void RegisterTensor(pybind11::module* m) {
         .def("SetBufferPtr",
              [](PyTensor& tensor, uint64_t ptr) -> void {
                  tensor.GetPtr()->SetBufferPtr((void*)ptr);
+             })
+        .def("GetDeviceContext",
+             [](const PyTensor& tensor) -> PyDeviceContext {
+                 return PyDeviceContext(tensor.GetPtr()->GetDeviceContext());
              })
         .def("GetName", &PyTensor::GetName, pybind11::return_value_policy::reference)
         .def("GetShape", &PyTensor::GetConstShape, pybind11::return_value_policy::reference)

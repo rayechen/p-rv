@@ -34,19 +34,19 @@ RetCode MMCVNonMaxSupressionOp::Init(const OptKernelOptions& options) {
         return status;
     }
 
-    infer_type_func_ = [this](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
-        auto shape0 = &info->GetInput<TensorImpl>(0)->GetShape();
+    infer_type_func_ = [](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
+        auto shape0 = info->GetInput<TensorImpl>(0)->GetShape();
         shape0->SetDataType(DATATYPE_FLOAT32);
 
-        auto shape1 = &info->GetInput<TensorImpl>(1)->GetShape();
+        auto shape1 = info->GetInput<TensorImpl>(1)->GetShape();
         shape1->SetDataType(DATATYPE_FLOAT32);
 
-        auto shape = &info->GetOutput<TensorImpl>(0)->GetShape();
+        auto shape = info->GetOutput<TensorImpl>(0)->GetShape();
         shape->SetDataType(DATATYPE_INT64);
         return RC_SUCCESS;
     };
 
-    infer_dims_func_ = [this](InputOutputInfo* info) -> RetCode {
+    infer_dims_func_ = [](InputOutputInfo* info) -> RetCode {
         return oputils::ReshapeMMCVNonMaxSuppression(info, nullptr);
     };
 

@@ -15,6 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#ifndef NDEBUG
+#include <set>
+#endif
+
 #include "ppl/nn/common/logger.h"
 #include "ppl/nn/runtime/sequential_scheduler.h"
 #include "ppl/nn/runtime/scheduler_common.h"
@@ -27,16 +31,11 @@ RetCode SequentialScheduler::Init(const ir::GraphTopo* topo, const RuntimeAuxInf
     graph_ = g;
     topo_ = topo;
     aux_info_ = aux_info;
-
-    const_object_refcount_ = utils::InitObjectRefcount(topo_);
-    edgeid2object_ = utils::InitObjectInUse(topo_, g);
-
+    edgeid2object_ = utils::InitObjectInUse(topo->GetMaxEdgeId(), g);
     return RC_SUCCESS;
 }
 
 RetCode SequentialScheduler::Run(Profiler* profiler) {
-    std::vector<uint32_t> object_refcount = const_object_refcount_;
-
     auto acquire_object_func = [this](edgeid_t eid, uint32_t etype, Device* device) -> EdgeObject* {
         if (eid >= edgeid2object_.size()) {
             return nullptr;
@@ -68,29 +67,31 @@ RetCode SequentialScheduler::Run(Profiler* profiler) {
         return object;
     };
 
-    auto release_object_func = [this, &object_refcount](EdgeObject* object) -> RetCode {
+    auto release_object_func = [this](EdgeObject* object, nodeid_t user) -> RetCode {
         auto eid = object->GetEdge()->GetId();
-        uint32_t& refcount = object_refcount[eid];
-        if (refcount > 0) {
-            --refcount;
-            if (refcount == 0 && edgeid2object_[eid]) {
-                auto obj = edgeid2object_[eid];
-                if (obj->GetObjectType() == EdgeObject::T_TENSOR) {
-                    tensor_pool_.Free(static_cast<TensorImpl*>(obj));
-                } else if (obj->GetObjectType() == EdgeObject::T_TENSOR_SEQUENCE) {
-                    tensor_sequence_pool_.Free(static_cast<TensorSequence*>(obj));
-                } else {
-                    LOG(ERROR) << "invalid edge object type[" << obj->GetObjectType() << "]";
-                    return RC_INVALID_VALUE;
-                }
-                edgeid2object_[eid] = nullptr;
+        if (aux_info_->tensor_last_consumer[eid] == user) {
+            auto obj = edgeid2object_[eid];
+            if (obj->GetObjectType() == EdgeObject::T_TENSOR) {
+                tensor_pool_.Free(static_cast<TensorImpl*>(obj));
+            } else if (obj->GetObjectType() == EdgeObject::T_TENSOR_SEQUENCE) {
+                tensor_sequence_pool_.Free(static_cast<TensorSequence*>(obj));
+            } else {
+                LOG(ERROR) << "invalid edge object type[" << obj->GetObjectType() << "]";
+                return RC_INVALID_VALUE;
             }
-            return RC_SUCCESS;
+            edgeid2object_[eid] = nullptr;
         }
-
-        LOG(ERROR) << "invalid refcount of object[" << object->GetEdge()->GetName() << "]";
-        return RC_INVALID_VALUE;
+        return RC_SUCCESS;
     };
+
+#ifndef NDEBUG
+    set<edgeid_t> edges_before;
+    for (uint32_t i = 0; i < edgeid2object_.size(); ++i) {
+        if (edgeid2object_[i]) {
+            edges_before.insert(i);
+        }
+    }
+#endif
 
     KernelExecContext ctx;
     ctx.SetAcquireObjectFunc(acquire_object_func);
@@ -107,6 +108,43 @@ RetCode SequentialScheduler::Run(Profiler* profiler) {
             return status;
         }
     }
+
+#ifndef NDEBUG
+    set<edgeid_t> edges_after;
+    for (uint32_t i = 0; i < edgeid2object_.size(); ++i) {
+        if (edgeid2object_[i]) {
+            edges_after.insert(i);
+        }
+    }
+
+    vector<edgeid_t> diff_before2after(edges_before.size());
+    auto end_iter = std::set_difference(edges_before.begin(), edges_before.end(), edges_after.begin(),
+                                        edges_after.end(), diff_before2after.begin());
+    diff_before2after.resize(end_iter - diff_before2after.begin());
+    if (!diff_before2after.empty()) {
+        LOG(ERROR) << "edge(s) in `before` but not in `after`:";
+        for (auto x = diff_before2after.begin(); x != diff_before2after.end(); ++x) {
+            auto edge = topo_->GetEdgeById(*x);
+            LOG(ERROR) << " " << edge->GetName();
+        }
+    }
+
+    vector<edgeid_t> diff_after2before(edges_after.size());
+    end_iter = std::set_difference(edges_after.begin(), edges_after.end(), edges_before.begin(), edges_before.end(),
+                                   diff_after2before.begin());
+    diff_after2before.resize(end_iter - diff_after2before.begin());
+    if (!diff_after2before.empty()) {
+        LOG(ERROR) << "edge(s) in `after` but not in `before`:";
+        for (auto x = diff_after2before.begin(); x != diff_after2before.end(); ++x) {
+            auto edge = topo_->GetEdgeById(*x);
+            LOG(ERROR) << " " << edge->GetName();
+        }
+    }
+
+    if (!diff_before2after.empty() || !diff_after2before.empty()) {
+        return RC_OTHER_ERROR;
+    }
+#endif
 
     return RC_SUCCESS;
 }

@@ -31,9 +31,9 @@
 
 namespace ppl { namespace nn { namespace riscv {
 
-class GemmOp final : public RISCVOptKernel {
+class GemmOp final : public RiscvOptKernel {
 public:
-    GemmOp(const ir::Node* node) : RISCVOptKernel(node), fc_param_(nullptr) {}
+    GemmOp(const ir::Node* node) : RiscvOptKernel(node), fc_param_(nullptr) {}
     ~GemmOp();
     ppl::common::RetCode Init(const OptKernelOptions& options) override;
     ppl::common::RetCode SelectFormat(const InputOutputInfo& info,
@@ -50,12 +50,12 @@ private:
     std::shared_ptr<ppl::nn::common::GemmParam> param_;
     bool gemm_fuse_relu_ = false;
 
-    template<typename T>
+    template <typename T>
     void gemm_op_graph_data_cvt(const float* graph_data, std::vector<T>& cvt_data, int32_t data_len) {
         auto data_bytes = data_len * sizeof(T);
         cvt_data.resize(data_bytes);
         if (typeid(T) == typeid(__fp16)) {
-            CvtFp32ToFp16(data_len, graph_data, cvt_data.data());        
+            CvtFp32ToFp16(data_len, graph_data, cvt_data.data());
         } else if (typeid(T) == typeid(float)) {
             memcpy(cvt_data.data(), graph_data, data_bytes);
         } else {
@@ -63,12 +63,11 @@ private:
         }
     }
 
-    template<typename T>
-    ppl::kernel::riscv::fc_manager<T> *gemm_op_gen_fc_algo(const ppl::kernel::riscv::fc_common_param &param,
-                                                                    const ppl::kernel::riscv::fc_common_algo_info &algo_info,
-                                                                    ppl::common::Allocator *allocator)
-    {
-        ppl::kernel::riscv::fc_base_manager *offline_manager;
+    template <typename T>
+    ppl::kernel::riscv::fc_manager<T>* gemm_op_gen_fc_algo(const ppl::kernel::riscv::fc_common_param& param,
+                                                           const ppl::kernel::riscv::fc_common_algo_info& algo_info,
+                                                           ppl::common::Allocator* allocator) {
+        ppl::kernel::riscv::fc_base_manager* offline_manager;
         if (typeid(T) == typeid(__fp16)) {
             offline_manager = ppl::kernel::riscv::fc_algo_selector_fp16::gen_algo(param, algo_info, allocator);
         } else if (typeid(T) == typeid(float)) {
@@ -79,8 +78,9 @@ private:
         return (ppl::kernel::riscv::fc_manager<T>*)(offline_manager);
     }
 
-    template<typename T>
-    ppl::kernel::riscv::fc_common_algo_info gemm_op_select_fc_algo(const ppl::common::dataformat_t &src_format, const ppl::kernel::riscv::fc_common_param &param) {
+    template <typename T>
+    ppl::kernel::riscv::fc_common_algo_info gemm_op_select_fc_algo(const ppl::common::dataformat_t& src_format,
+                                                                   const ppl::kernel::riscv::fc_common_param& param) {
         if (typeid(T) == typeid(__fp16)) {
             return ppl::kernel::riscv::fc_algo_selector_fp16::select_algo(src_format, param);
         } else if (typeid(T) == typeid(float)) {
@@ -90,7 +90,7 @@ private:
         }
     }
 
-    template<typename T>
+    template <typename T>
     ppl::common::RetCode InitFC(const OptKernelOptions& options) {
         auto status = GenericLoadParam(options, &param_);
         if (status != ppl::common::RC_SUCCESS) {
@@ -117,7 +117,7 @@ private:
             if (bias_data_it != graph_data->constants.end()) {
                 bias_data = (const float*)bias_data_it->second.data.data();
                 int64_t bias_len = bias_data_it->second.data.size() / sizeof(float);
-                gemm_op_graph_data_cvt<T>(bias_data, bias_cvt, bias_len);          
+                gemm_op_graph_data_cvt<T>(bias_data, bias_cvt, bias_len);
             }
         }
 
@@ -136,10 +136,11 @@ private:
 
             fc_param_->algo_info = gemm_op_select_fc_algo<T>(ppl::common::DATAFORMAT_NDARRAY, fc_param_->param);
             if (fc_param_->algo_info.algo_type == ppl::kernel::riscv::fc_common_algo::unknown) {
-                LOG(INFO) << "FC select algorithm failed";
+                LOG(DEBUG) << "FC select algorithm failed";
                 return ppl::common::RC_UNSUPPORTED;
             } else {
-                auto mgr = gemm_op_gen_fc_algo<T>(fc_param_->param, fc_param_->algo_info, options.device->GetAllocator());
+                auto mgr =
+                    gemm_op_gen_fc_algo<T>(fc_param_->param, fc_param_->algo_info, options.device->GetAllocator());
                 if (bias_data != nullptr) {
                     mgr->gen_cvt_weights(weight_cvt.data(), bias_cvt.data());
                 } else {

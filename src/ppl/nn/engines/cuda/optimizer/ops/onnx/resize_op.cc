@@ -20,6 +20,7 @@
 #include "ppl/nn/common/logger.h"
 #include "ppl/nn/engines/cuda/kernels/onnx/resize_kernel.h"
 #include "ppl/nn/oputils/onnx/reshape_resize.h"
+#include<iostream>
 
 using namespace std;
 using namespace ppl::common;
@@ -34,7 +35,7 @@ RetCode ResizeOp::Init(const OptKernelOptions& options) {
         return status;
     }
 
-    infer_type_func_ = [this](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
+    infer_type_func_ = [](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
         ppl::common::RetCode status;
         if (type == DATATYPE_UNKNOWN) {
             status = InferInheritedType(info);
@@ -43,8 +44,10 @@ RetCode ResizeOp::Init(const OptKernelOptions& options) {
         } else {
             status = InferDefaultType(info, type);
         }
+        auto shape = info->GetInput<TensorImpl>(2)->GetShape();
+        shape->SetDataType(ppl::common::DATATYPE_FLOAT32);
         if (info->GetInputCount() == 4) {
-            auto shape = &info->GetInput<TensorImpl>(3)->GetShape();
+            auto shape = info->GetInput<TensorImpl>(3)->GetShape();
             shape->SetDataType(ppl::common::DATATYPE_INT64);
         }
         return status;
@@ -55,8 +58,8 @@ RetCode ResizeOp::Init(const OptKernelOptions& options) {
         float* scales_data = nullptr;
         int64_t* sizes_data = nullptr;
 
-        if (!info->GetInput<TensorImpl>(1)->GetShape().IsEmpty()) {
-            auto shape = info->GetInput<TensorImpl>(1)->GetShape();
+        if (!info->GetInput<TensorImpl>(1)->GetShape()->IsEmpty()) {
+            const TensorShape& shape = *info->GetInput<TensorImpl>(1)->GetShape();
             roi_data = (float*)malloc(shape.GetBytesIncludingPadding());
             if (info->GetInput<TensorImpl>(1)->GetBufferPtr<void>() == nullptr)
                 return RC_INVALID_VALUE;
@@ -66,8 +69,8 @@ RetCode ResizeOp::Init(const OptKernelOptions& options) {
                 return status;
             }
         }
-        if (!info->GetInput<TensorImpl>(2)->GetShape().IsEmpty()) {
-            auto shape = info->GetInput<TensorImpl>(2)->GetShape();
+        if (!info->GetInput<TensorImpl>(2)->GetShape()->IsEmpty()) {
+            const TensorShape& shape = *info->GetInput<TensorImpl>(2)->GetShape();
             scales_data = (float*)malloc(shape.GetBytesIncludingPadding());
             if (info->GetInput<TensorImpl>(2)->GetBufferPtr<void>() == nullptr) {
                 return RC_INVALID_VALUE;
@@ -79,8 +82,8 @@ RetCode ResizeOp::Init(const OptKernelOptions& options) {
             }
         }
         if (info->GetInputCount() == 4) {
-            if (!info->GetInput<TensorImpl>(3)->GetShape().IsEmpty()) {
-                auto shape = info->GetInput<TensorImpl>(3)->GetShape();
+            if (!info->GetInput<TensorImpl>(3)->GetShape()->IsEmpty()) {
+                const TensorShape& shape = *info->GetInput<TensorImpl>(3)->GetShape();
                 sizes_data = (int64_t*)malloc(shape.GetBytesIncludingPadding());
                 if (info->GetInput<TensorImpl>(3)->GetBufferPtr<void>() == nullptr) {
                     return RC_INVALID_VALUE;

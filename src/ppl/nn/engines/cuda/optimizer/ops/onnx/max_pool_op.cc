@@ -35,7 +35,6 @@ RetCode MaxPoolOp::Init(const OptKernelOptions& options) {
     }
 
     infer_type_func_ = [this](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
-        type = ppl::common::DATATYPE_FLOAT16;
         ppl::common::RetCode status;
         if (type == DATATYPE_UNKNOWN) {
             status = InferInheritedType(info);
@@ -45,7 +44,7 @@ RetCode MaxPoolOp::Init(const OptKernelOptions& options) {
             status = InferDefaultType(info, type);
         }
         if (info->GetOutputCount() > 1) {
-            auto shape = &info->GetOutput<TensorImpl>(1)->GetShape();
+            auto shape = info->GetOutput<TensorImpl>(1)->GetShape();
             shape->SetDataType(ppl::common::DATATYPE_INT64);
         }
         return status;

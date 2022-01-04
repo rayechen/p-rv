@@ -22,6 +22,7 @@
 #include "ppl/nn/runtime/tensor_impl.h"
 #include "ppl/nn/engines/x86/x86_device.h"
 #include "ppl/nn/engines/x86/x86_common_param.h"
+#include "ppl/nn/runtime/runtime_partition_info.h"
 #include <functional>
 
 namespace ppl { namespace nn { namespace utils {
@@ -33,7 +34,10 @@ namespace ppl { namespace nn { namespace x86 {
 struct OptKernelOptions {
     utils::SharedResource* resource = nullptr;
     ir::GraphData* graph_data = nullptr;
+    ir::GraphTopo* graph_topo = nullptr;
     X86Device* device = nullptr;
+    RuntimePartitionInfo *info = nullptr;
+    std::map<edgeid_t, std::unique_ptr<TensorImpl>> *tensors = nullptr;
 };
 
 class X86OptKernel : public OptKernel {
@@ -70,6 +74,10 @@ public:
         common_param_.output_formats[idx] = format;
     }
 
+    virtual ppl::common::RetCode OmitConstantsData(std::map<edgeid_t, int64_t> *constants_data_refcount) {
+        return ppl::common::RC_SUCCESS;
+    }
+
 protected:
     template <typename T>
     ppl::common::RetCode GenericLoadParam(const OptKernelOptions& options, std::shared_ptr<T>* param) const {
@@ -93,7 +101,7 @@ protected:
         kernel->SetReshapeFunc([this](InputOutputInfo* info) -> ppl::common::RetCode {
             infer_type_func_(info);
             for (uint32_t i = 0; i < info->GetOutputCount(); i++) {
-                info->GetOutput<TensorImpl>(i)->GetShape().SetDataFormat(common_param_.output_formats[i]);
+                info->GetOutput<TensorImpl>(i)->GetShape()->SetDataFormat(common_param_.output_formats[i]);
             }
             return infer_dims_func_(info);
         });
@@ -107,7 +115,7 @@ protected:
         kernel->SetReshapeFunc([this](InputOutputInfo* info) -> ppl::common::RetCode {
             infer_type_func_(info);
             for (uint32_t i = 0; i < info->GetOutputCount(); i++) {
-                info->GetOutput<TensorImpl>(i)->GetShape().SetDataFormat(common_param_.output_formats[i]);
+                info->GetOutput<TensorImpl>(i)->GetShape()->SetDataFormat(common_param_.output_formats[i]);
             }
             return infer_dims_func_(info);
         });
@@ -115,9 +123,9 @@ protected:
     }
 
     static ppl::common::RetCode GenericInferDims(InputOutputInfo* info) {
-        auto& in_shape0 = info->GetInput<TensorImpl>(0)->GetShape();
+        auto& in_shape0 = *info->GetInput<TensorImpl>(0)->GetShape();
         for (uint32_t i = 0; i < info->GetOutputCount(); ++i) {
-            auto& out_shape = info->GetOutput<TensorImpl>(i)->GetShape();
+            auto& out_shape = *info->GetOutput<TensorImpl>(i)->GetShape();
             if (in_shape0.IsScalar()) {
                 out_shape.ReshapeAsScalar();
             } else {
@@ -128,9 +136,9 @@ protected:
     }
 
     static void GenericInferType(InputOutputInfo* info) {
-        auto& in_shape0 = info->GetInput<TensorImpl>(0)->GetShape();
+        auto& in_shape0 = *info->GetInput<TensorImpl>(0)->GetShape();
         for (uint32_t i = 0; i < info->GetOutputCount(); ++i) {
-            auto out_shape = &info->GetOutput<TensorImpl>(i)->GetShape();
+            auto out_shape = info->GetOutput<TensorImpl>(i)->GetShape();
             out_shape->SetDataType(in_shape0.GetDataType());
         }
     }

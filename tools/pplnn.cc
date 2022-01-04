@@ -46,8 +46,10 @@ Define_string_opt("--mm-policy", g_flag_mm_policy, "mem",
                   "\"perf\" => better performance, or \"mem\" => less memory usage");
 
 Define_bool_opt("--enable-profiling", g_flag_enable_profiling, false, "enable profiling and print profiling info");
-Define_float_opt("--min-profiling-time", g_flag_min_profiling_time, 1.0f, "min execute time by seconds for profiling");
-Define_uint32_opt("--warmuptimes", g_flag_warmup_times, 0, "declare warmup times");
+Define_float_opt("--min-profiling-seconds", g_flag_min_profiling_seconds, 1.0f,
+                 "min execute time by seconds for profiling");
+Define_uint32_opt("--min-profiling-iterations", g_flag_min_profiling_iterations, 1, "declare profiling iteration");
+Define_uint32_opt("--warmup-iterations", g_flag_warmup_iterations, 1, "declare profiling warmup iteration");
 
 Define_string_opt("--input", g_flag_input, "", "binary input file containing all tensors' data");
 Define_string_opt("--inputs", g_flag_inputs, "", "binary input files separated by comma");
@@ -69,186 +71,26 @@ Define_string_opt("--save-data-dir", g_flag_save_data_dir, ".",
 /* -------------------------------------------------------------------------- */
 
 template <typename T>
-string ToString(T v) {
+static string ToString(T v) {
     stringstream ss;
     ss << v;
     return ss.str();
 }
 
-#ifdef PPLNN_USE_CUDA
+static vector<int64_t> GenerateRandomDims(uint32_t dim_count) {
+    static const uint32_t max_dim = 640;
+    static const uint32_t min_dim = 128;
+    srand(time(nullptr));
 
-Define_bool_opt("--use-cuda", g_flag_use_cuda, false, "use cuda engine");
-
-Define_string_opt("--output-format", g_flag_output_format, "", "declare the output format");
-Define_string_opt("--output-type", g_flag_output_type, "", "declare the output type");
-Define_string_opt("--dims", g_flag_compiler_dims, "",
-                  "declare init input dims for algo selection (split with comma)."
-                  " for example: 1_3_224_224,1_3_128_640");
-Define_bool_opt("--quick-select", g_flag_quick_select, false, "quick select algorithms for conv and gemm kernel");
-Define_uint32_opt("--device-id", g_flag_device_id, 0, "declare device id for cuda");
-
-Define_string_opt("--algo-info", g_algo_info, "", "declare best algo index for certain conv input shape");
-
-#include "ppl/nn/engines/cuda/engine_factory.h"
-#include "ppl/nn/engines/cuda/cuda_options.h"
-
-static inline bool RegisterCudaEngine(vector<unique_ptr<Engine>>* engines) {
-    CudaEngineOptions options;
-    options.device_id = g_flag_device_id;
-
-    if (g_flag_mm_policy == "perf") {
-        options.mm_policy = CUDA_MM_BEST_FIT;
-    } else if (g_flag_mm_policy == "mem") {
-        options.mm_policy = CUDA_MM_COMPACT;
+    vector<int64_t> dims(dim_count);
+    for (uint32_t i = 0; i < dim_count; ++i) {
+        dims[i] = rand() % (max_dim - min_dim + 1) + min_dim;
     }
-
-    auto cuda_engine = CudaEngineFactory::Create(options);
-    if (!cuda_engine) {
-        return false;
-    }
-
-    cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_OUTPUT_FORMAT, g_flag_output_format.c_str());
-    cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_OUTPUT_TYPE, g_flag_output_type.c_str());
-    cuda_engine->Configure(ppl::nn::CUDA_CONF_USE_DEFAULT_ALGORITHMS, g_flag_quick_select);
-    cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_ALGORITHM, g_algo_info.c_str());
-
-    if (!g_flag_compiler_dims.empty()) {
-        cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_COMPILER_INPUT_SHAPE, g_flag_compiler_dims.c_str());
-    }
-
-    engines->emplace_back(unique_ptr<Engine>(cuda_engine));
-    LOG(INFO) << "***** register CudaEngine *****";
-    return true;
+    return dims;
 }
 
-#endif
-
-#ifdef PPLNN_USE_X86
-
-Define_bool_opt("--use-x86", g_flag_use_x86, false, "use x86 engine");
-
-Define_bool_opt("--disable-avx512", g_flag_disable_avx512, false, "disable avx512 feature");
-Define_bool_opt("--disable-avx-fma3", g_flag_disable_avx_fma3, false, "disable avx, fma3 and avx512 feature");
-Define_bool_opt("--core-binding", g_flag_core_binding, false, "core binding");
-
-#include "ppl/nn/engines/x86/engine_factory.h"
-#include "ppl/nn/engines/x86/x86_options.h"
-#include "ppl/kernel/x86/common/threading_tools.h"
-static inline bool RegisterX86Engine(vector<unique_ptr<Engine>>* engines) {
-    X86EngineOptions options;
-    if (g_flag_mm_policy == "perf") {
-        options.mm_policy = X86_MM_MRU;
-    } else if (g_flag_mm_policy == "mem") {
-        options.mm_policy = X86_MM_COMPACT;
-    }
-
-    auto x86_engine = X86EngineFactory::Create(options);
-    if (g_flag_disable_avx512) {
-        x86_engine->Configure(ppl::nn::X86_CONF_DISABLE_AVX512);
-    }
-    if (g_flag_disable_avx_fma3) {
-        x86_engine->Configure(ppl::nn::X86_CONF_DISABLE_AVX_FMA3);
-    }
-    if (g_flag_core_binding) {
-        ppl::kernel::x86::set_omp_core_binding(nullptr, 0, 1);
-    }
-    // configure engine
-    engines->emplace_back(unique_ptr<Engine>(x86_engine));
-    LOG(INFO) << "***** register X86Engine *****";
-    return true;
-}
-
-#endif
-
-#ifdef PPLNN_USE_RISCV
-
-Define_bool_opt("--use-riscv", g_flag_use_riscv, false, "use riscv engine");
-Define_bool_opt("--use-fp16", g_flag_use_fp16, false, "infer with riscv fp32");
-Define_string_opt("--output-format", g_flag_output_format, "", "declare the output format");
-Define_string_opt("--output-type", g_flag_output_type, "", "declare the output type");
-Define_bool_opt("--tune-param", g_tune_param, false, "tune parameters for conv and gemm kernel");
-
-#include "ppl/nn/engines/riscv/engine_factory.h"
-#include "ppl/nn/engines/riscv/riscv_options.h"
-#include "ppl/nn/engines/riscv/riscv_engine_options.h"
-
-static inline bool RegisterRISCVEngine(vector<unique_ptr<Engine>>* engines) {
-    RISCVEngineOptions options;
-    options.tune_param_flag = g_tune_param;
-    if (g_flag_use_fp16) {
-        options.forward_precision = RISCV_USE_FP16;
-    } else {
-        options.forward_precision = RISCV_USE_FP32;
-    }
-
-    auto riscv_engine = RISCVEngineFactory::Create(options);
-    // configure engine
-    engines->emplace_back(unique_ptr<Engine>(riscv_engine));
-    LOG(INFO) << "***** register RISCVEngine *****";
-    return true;
-}
-
-#endif
-
-static inline bool RegisterEngines(vector<unique_ptr<Engine>>* engines) {
-#ifdef PPLNN_USE_X86
-    if (g_flag_use_x86) {
-        bool ok = RegisterX86Engine(engines);
-        if (!ok) {
-            LOG(ERROR) << "RegisterX86Engine failed.";
-            return false;
-        }
-    }
-#endif
-
-#ifdef PPLNN_USE_CUDA
-    if (g_flag_use_cuda) {
-        bool ok = RegisterCudaEngine(engines);
-        if (!ok) {
-            LOG(ERROR) << "RegisterCudaEngine failed.";
-            return false;
-        }
-    }
-#endif
-
-#ifdef PPLNN_USE_RISCV
-    if (g_flag_use_riscv) {
-        bool ok = RegisterRISCVEngine(engines);
-        if (!ok) {
-            LOG(ERROR) << "RegisterCudaEngine failed.";
-            return false;
-        }
-    }
-#endif
-
-    if (engines->empty()) {
-        LOG(ERROR) << "no engine is registered. run `./pplnn --help` to see supported engines marked with '--use-*', "
-                      "or see documents listed in README.md for building instructions.";
-        return false;
-    }
-
-    return true;
-}
-
-/* -------------------------------------------------------------------------- */
-
-static string GetDimsStr(const Tensor* tensor) {
-    auto& shape = tensor->GetShape();
-    if (shape.GetRealDimCount() == 0) {
-        return string();
-    }
-
-    string res = ToString(shape.GetDim(0));
-    for (uint32_t i = 1; i < shape.GetDimCount(); ++i) {
-        res += "_" + ToString(shape.GetDim(i));
-    }
-
-    return res;
-}
-
-static const char* MemMem(const char* haystack, unsigned int haystack_len,
-                          const char* needle, unsigned int needle_len)
-{
+static const char* MemMem(const char* haystack, unsigned int haystack_len, const char* needle,
+                          unsigned int needle_len) {
     if (!haystack || haystack_len == 0 || !needle || needle_len == 0) {
         return nullptr;
     }
@@ -284,32 +126,289 @@ static void SplitString(const char* str, unsigned int len, const char* delim, un
     f("", 0); // the last empty field
 }
 
-static void GenerateRandomDims(TensorShape* shape) {
-    static const uint32_t max_dim = 640;
-    static const uint32_t min_dim = 128;
-    srand(time(nullptr));
+static bool ParseInputShapes(const string& shape_str, vector<vector<int64_t>>* input_shapes) {
+    bool ok = true;
 
-    auto dimcount = shape->GetRealDimCount();
-    for (uint32_t i = 2; i < dimcount; ++i) {
-        if (shape->GetDim(i) == 1) {
-            auto value = rand() % (max_dim - min_dim + 1) + min_dim;
-            shape->SetDim(i, value);
-        }
+    vector<string> input_shape_list;
+    SplitString(shape_str.data(), shape_str.size(), ",", 1,
+                [&ok, &input_shape_list](const char* s, unsigned int l) -> bool {
+                    if (l > 0) {
+                        input_shape_list.emplace_back(s, l);
+                        return true;
+                    }
+                    LOG(ERROR) << "empty shape in option '--input-shapes'";
+                    ok = false;
+                    return false;
+                });
+    if (!ok) {
+        return false;
     }
+
+    for (auto x = input_shape_list.begin(); x != input_shape_list.end(); ++x) {
+        ok = true;
+        vector<int64_t> shape;
+        SplitString(x->data(), x->size(), "_", 1, [&ok, &shape](const char* s, unsigned int l) -> bool {
+            if (l > 0) {
+                int64_t dim = atol(string(s, l).c_str());
+                shape.push_back(dim);
+                return true;
+            }
+            LOG(ERROR) << "illegal dim format.";
+            ok = false;
+            return false;
+        });
+        if (!ok) {
+            return false;
+        }
+
+        input_shapes->push_back(shape);
+    }
+
+    return true;
 }
 
-static bool SetRandomInputs(const vector<vector<int64_t>>& input_shapes, Runtime* runtime) {
-    for (uint32_t c = 0; c < runtime->GetInputCount(); ++c) {
-        auto t = runtime->GetInputTensor(c);
-        auto& shape = t->GetShape();
+/* -------------------------------------------------------------------------- */
 
-        if (input_shapes.empty()) {
-            GenerateRandomDims(&shape);
-        } else {
-            shape.Reshape(input_shapes[c]);
+#ifdef PPLNN_USE_CUDA
+
+Define_bool_opt("--use-cuda", g_flag_use_cuda, false, "use cuda engine");
+
+Define_bool_opt("--quick-select", g_flag_quick_select, false, "quick select algorithms for conv and gemm kernel");
+Define_uint32_opt("--device-id", g_flag_device_id, 0, "declare device id for cuda");
+Define_string_opt("--kernel-type", g_flag_kernel_type, "", "declare default kernel type for cuda");
+
+Define_string_opt("--export-algo-file", g_flag_export_algo_file, "",
+                  "Export the selected best algo info into the json file.");
+Define_string_opt("--import-algo-file", g_flag_import_algo_file, "",
+                  "The objects in the json file declare best algo info for certain conv input shape");
+
+Define_string_opt("--quant-file", g_flag_quant_file, "", "declare json file saved quantization information");
+
+#include "ppl/nn/engines/cuda/engine_factory.h"
+#include "ppl/nn/engines/cuda/cuda_options.h"
+#include "ppl/nn/utils/array.h"
+
+static inline bool RegisterCudaEngine(vector<unique_ptr<Engine>>* engines) {
+    CudaEngineOptions options;
+    options.device_id = g_flag_device_id;
+
+    if (g_flag_mm_policy == "perf") {
+        options.mm_policy = CUDA_MM_BEST_FIT;
+    } else if (g_flag_mm_policy == "mem") {
+        options.mm_policy = CUDA_MM_COMPACT;
+    }
+
+    auto cuda_engine = CudaEngineFactory::Create(options);
+    if (!cuda_engine) {
+        return false;
+    }
+
+    cuda_engine->Configure(ppl::nn::CUDA_CONF_USE_DEFAULT_ALGORITHMS, g_flag_quick_select);
+
+    if (!g_flag_kernel_type.empty()) {
+        datatype_t kernel_type = DATATYPE_UNKNOWN;
+        for (datatype_t i = DATATYPE_UNKNOWN; i < DATATYPE_MAX; i++) {
+            if (GetDataTypeStr(i) == g_flag_kernel_type) {
+                kernel_type = i;
+                break;
+            }
         }
 
-        auto nr_element = shape.GetBytesIncludingPadding() / sizeof(float);
+        if (kernel_type != DATATYPE_UNKNOWN) {
+            cuda_engine->Configure(ppl::nn::CUDA_CONF_USE_DEFAULT_KERNEL_TYPE, kernel_type);
+        } else {
+            LOG(ERROR) << "invalid kernel type[" << g_flag_kernel_type << "]";
+        }
+    }
+
+    if (!g_flag_quant_file.empty()) {
+        cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_QUANTIZATION, g_flag_quant_file.c_str());
+    }
+
+    if (!g_flag_export_algo_file.empty()) {
+        cuda_engine->Configure(ppl::nn::CUDA_CONF_EXPORT_ALGORITHMS, g_flag_export_algo_file.c_str());
+    }
+
+    if (!g_flag_import_algo_file.empty()) {
+        // import and export from the same file
+        if (g_flag_import_algo_file == g_flag_export_algo_file) {
+            // try to create this file first
+            ofstream ofs(g_flag_export_algo_file, ios_base::app);
+            if (!ofs.is_open()) {
+                LOG(ERROR) << "cannot create file[" << g_flag_export_algo_file << "] for exporting algorithms.";
+                return false;
+            }
+            ofs.close();
+        }
+
+        cuda_engine->Configure(ppl::nn::CUDA_CONF_IMPORT_ALGORITHMS, g_flag_import_algo_file.c_str());
+    }
+
+    // pass input shapes to cuda engine for further optimizations
+    if (!g_flag_input_shapes.empty()) {
+        vector<vector<int64_t>> input_shapes;
+        if (!ParseInputShapes(g_flag_input_shapes, &input_shapes)) {
+            LOG(ERROR) << "ParseInputShapes failed.";
+            return false;
+        }
+
+        vector<utils::Array<int64_t>> dims(input_shapes.size());
+        for (uint32_t i = 0; i < input_shapes.size(); ++i) {
+            auto& arr = dims[i];
+            arr.base = input_shapes[i].data();
+            arr.size = input_shapes[i].size();
+        }
+        cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_INPUT_DIMS, dims.data(), dims.size());
+    }
+
+    engines->emplace_back(unique_ptr<Engine>(cuda_engine));
+    LOG(INFO) << "***** register CudaEngine *****";
+    return true;
+}
+
+#endif
+
+#ifdef PPLNN_USE_X86
+
+Define_bool_opt("--use-x86", g_flag_use_x86, false, "use x86 engine");
+
+Define_bool_opt("--disable-avx512", g_flag_disable_avx512, false, "disable avx512 feature");
+Define_bool_opt("--disable-avx-fma3", g_flag_disable_avx_fma3, false, "disable avx, fma3 and avx512 feature");
+Define_bool_opt("--core-binding", g_flag_core_binding, false, "core binding");
+
+#include "ppl/nn/engines/x86/engine_factory.h"
+#include "ppl/nn/engines/x86/x86_options.h"
+#include "ppl/kernel/x86/common/threading_tools.h"
+
+static inline bool RegisterX86Engine(vector<unique_ptr<Engine>>* engines) {
+    X86EngineOptions options;
+    if (g_flag_mm_policy == "perf") {
+        options.mm_policy = X86_MM_MRU;
+    } else if (g_flag_mm_policy == "mem") {
+        options.mm_policy = X86_MM_COMPACT;
+    }
+
+    auto x86_engine = X86EngineFactory::Create(options);
+    if (g_flag_disable_avx512) {
+        x86_engine->Configure(ppl::nn::X86_CONF_DISABLE_AVX512);
+    }
+    if (g_flag_disable_avx_fma3) {
+        x86_engine->Configure(ppl::nn::X86_CONF_DISABLE_AVX_FMA3);
+    }
+    if (g_flag_core_binding) {
+        ppl::kernel::x86::set_omp_core_binding(nullptr, 0, 1);
+    }
+    // configure engine
+    engines->emplace_back(unique_ptr<Engine>(x86_engine));
+    LOG(INFO) << "***** register X86Engine *****";
+    return true;
+}
+
+#endif
+
+#ifdef PPLNN_USE_RISCV
+
+Define_bool_opt("--use-riscv", g_flag_use_riscv, false, "use riscv engine");
+Define_bool_opt("--use-fp16", g_flag_use_fp16, false, "infer with riscv fp32");
+Define_string_opt("--output-format", g_flag_output_format, "", "declare the output format");
+Define_string_opt("--output-type", g_flag_output_type, "", "declare the output type");
+
+#include "ppl/nn/engines/riscv/engine_factory.h"
+#include "ppl/nn/engines/riscv/riscv_options.h"
+#include "ppl/nn/engines/riscv/riscv_engine_options.h"
+
+static inline bool RegisterRiscvEngine(vector<unique_ptr<Engine>>* engines) {
+    RiscvEngineOptions options;
+    options.tune_param_flag = false;
+    if (g_flag_use_fp16) {
+        options.forward_precision = RISCV_USE_FP16;
+    } else {
+        options.forward_precision = RISCV_USE_FP32;
+    }
+
+    auto riscv_engine = RiscvEngineFactory::Create(options);
+    // configure engine
+    engines->emplace_back(unique_ptr<Engine>(riscv_engine));
+    LOG(INFO) << "***** register RiscvEngine *****";
+    return true;
+}
+
+#endif
+
+static inline bool RegisterEngines(vector<unique_ptr<Engine>>* engines) {
+#ifdef PPLNN_USE_X86
+    if (g_flag_use_x86) {
+        bool ok = RegisterX86Engine(engines);
+        if (!ok) {
+            LOG(ERROR) << "RegisterX86Engine failed.";
+            return false;
+        }
+    }
+#endif
+
+#ifdef PPLNN_USE_CUDA
+    if (g_flag_use_cuda) {
+        bool ok = RegisterCudaEngine(engines);
+        if (!ok) {
+            LOG(ERROR) << "RegisterCudaEngine failed.";
+            return false;
+        }
+    }
+#endif
+
+#ifdef PPLNN_USE_RISCV
+    if (g_flag_use_riscv) {
+        bool ok = RegisterRiscvEngine(engines);
+        if (!ok) {
+            LOG(ERROR) << "RegisterCudaEngine failed.";
+            return false;
+        }
+    }
+#endif
+
+    if (engines->empty()) {
+        LOG(ERROR) << "no engine is registered. run `./pplnn --help` to see supported engines marked with '--use-*', "
+                      "or see documents listed in README.md for building instructions.";
+        return false;
+    }
+
+    return true;
+}
+
+/* -------------------------------------------------------------------------- */
+
+static string GetDimsStr(const Tensor* tensor) {
+    auto shape = tensor->GetShape();
+    if (shape->GetRealDimCount() == 0) {
+        return string();
+    }
+
+    string res = ToString(shape->GetDim(0));
+    for (uint32_t i = 1; i < shape->GetDimCount(); ++i) {
+        res += "_" + ToString(shape->GetDim(i));
+    }
+
+    return res;
+}
+
+static bool SetRandomInputs(const vector<vector<int64_t>>& input_shapes, Runtime* runtime, vector<string>* input_data) {
+    for (uint32_t c = 0; c < runtime->GetInputCount(); ++c) {
+        auto t = runtime->GetInputTensor(c);
+        auto shape = t->GetShape();
+
+        if (input_shapes.empty()) {
+            auto dim_count = shape->GetRealDimCount();
+            auto dims = GenerateRandomDims(dim_count);
+            for (uint32_t j = 2; j < dim_count; ++j) {
+                if (shape->GetDim(j) == 1) {
+                    shape->SetDim(j, dims[j]);
+                }
+            }
+        } else {
+            shape->Reshape(input_shapes[c]);
+        }
+
+        auto nr_element = shape->GetBytesIncludingPadding() / sizeof(float);
         vector<float> buffer(nr_element);
 
         std::default_random_engine eng;
@@ -324,24 +423,22 @@ static bool SetRandomInputs(const vector<vector<int64_t>>& input_shapes, Runtime
             return false;
         }
 
-#ifdef PPLNN_USE_RISCV
-        TensorShape& src_desc = t->GetShape();
-#else
-        TensorShape src_desc = t->GetShape();
-#endif
-
+        TensorShape src_desc = *t->GetShape();
         src_desc.SetDataFormat(DATAFORMAT_NDARRAY);
         status = t->ConvertFromHost(buffer.data(), src_desc);
         if (status != RC_SUCCESS) {
             LOG(ERROR) << "set tensor[" << t->GetName() << "] content failed: " << GetRetCodeStr(status);
             return false;
         }
+
+        input_data->emplace_back(string((const char*)buffer.data(), buffer.size() * sizeof(float)));
     }
 
     return true;
 }
 
-static bool SetInputsAllInOne(const string& input_file, const vector<vector<int64_t>>& input_shapes, Runtime* runtime) {
+static bool SetInputsAllInOne(const string& input_file, const vector<vector<int64_t>>& input_shapes, Runtime* runtime,
+                              vector<string>* input_data) {
     FileMapping fm;
     auto status = fm.Init(input_file.c_str());
     if (status != RC_SUCCESS) {
@@ -354,7 +451,7 @@ static bool SetInputsAllInOne(const string& input_file, const vector<vector<int6
         auto t = runtime->GetInputTensor(c);
 
         if (!input_shapes.empty()) {
-            t->GetShape().Reshape(input_shapes[c]);
+            t->GetShape()->Reshape(input_shapes[c]);
         }
 
         auto status = t->ReallocBuffer();
@@ -363,11 +460,7 @@ static bool SetInputsAllInOne(const string& input_file, const vector<vector<int6
             return false;
         }
 
-#ifdef PPLNN_USE_RISCV
-        TensorShape& src_desc = t->GetShape();
-#else
-        TensorShape src_desc = t->GetShape();
-#endif
+        TensorShape src_desc = *t->GetShape();
         src_desc.SetDataFormat(DATAFORMAT_NDARRAY);
         status = t->ConvertFromHost(data, src_desc);
         if (status != RC_SUCCESS) {
@@ -375,7 +468,9 @@ static bool SetInputsAllInOne(const string& input_file, const vector<vector<int6
             return false;
         }
 
-        data += src_desc.GetBytesIncludingPadding();
+        const uint64_t content_size = src_desc.GetBytesIncludingPadding();
+        input_data->emplace_back(string(data, content_size));
+        data += content_size;
     }
 
     return true;
@@ -405,7 +500,7 @@ static const char* FindDataTypeStr(datatype_t dt) {
 }
 
 static bool SetInputsOneByOne(const string& input_files_str, const vector<vector<int64_t>>& input_shapes,
-                              Runtime* runtime) {
+                              Runtime* runtime, vector<string>* input_data) {
     vector<string> files;
     SplitString(input_files_str.data(), input_files_str.size(), ",", 1,
                 [&files](const char* s, unsigned int l) -> bool {
@@ -432,7 +527,7 @@ static bool SetInputsOneByOne(const string& input_files_str, const vector<vector
         auto t = runtime->GetInputTensor(i);
 
         if (!input_shapes.empty()) {
-            t->GetShape().Reshape(input_shapes[i]);
+            t->GetShape()->Reshape(input_shapes[i]);
         }
 
         status = t->ReallocBuffer();
@@ -441,17 +536,15 @@ static bool SetInputsOneByOne(const string& input_files_str, const vector<vector
             return false;
         }
 
-#ifdef PPLNN_USE_RISCV
-        TensorShape& src_desc = t->GetShape();
-#else
-        TensorShape src_desc = t->GetShape();
-#endif
+        TensorShape src_desc = *t->GetShape();
         src_desc.SetDataFormat(DATAFORMAT_NDARRAY);
         status = t->ConvertFromHost(fm.Data(), src_desc);
         if (status != RC_SUCCESS) {
             LOG(ERROR) << "set input[" << t->GetName() << "] failed: " << GetRetCodeStr(status);
             return false;
         }
+
+        input_data->emplace_back(string(fm.Data(), fm.Size()));
     }
 
     return true;
@@ -468,7 +561,7 @@ static string GetBasename(const string& path) {
     return last_entry;
 }
 
-static bool SetReshapedInputsOneByOne(const string& input_files_str, Runtime* runtime) {
+static bool SetReshapedInputsOneByOne(const string& input_files_str, Runtime* runtime, vector<string>* input_data) {
     vector<string> files;
     SplitString(input_files_str.data(), input_files_str.size(), ",", 1,
                 [&files](const char* s, unsigned int l) -> bool {
@@ -539,7 +632,7 @@ static bool SetReshapedInputsOneByOne(const string& input_files_str, Runtime* ru
         }
 
         auto t = runtime->GetInputTensor(c);
-        t->GetShape() = input_shape;
+        *t->GetShape() = input_shape;
 
         status = t->ReallocBuffer();
         if (status != RC_SUCCESS) {
@@ -547,17 +640,15 @@ static bool SetReshapedInputsOneByOne(const string& input_files_str, Runtime* ru
             return false;
         }
 
-#ifdef PPLNN_USE_RISCV
-        TensorShape& src_desc = t->GetShape();
-#else
-        TensorShape src_desc = t->GetShape();
-#endif
+        TensorShape src_desc = *t->GetShape();
         src_desc.SetDataFormat(DATAFORMAT_NDARRAY);
         status = t->ConvertFromHost(fm.Data(), src_desc);
         if (status != RC_SUCCESS) {
             LOG(ERROR) << "set input[" << t->GetName() << "] failed: " << GetRetCodeStr(status);
             return false;
         }
+
+        input_data->emplace_back(string(fm.Data(), fm.Size()));
     }
 
     return true;
@@ -566,16 +657,12 @@ static bool SetReshapedInputsOneByOne(const string& input_files_str, Runtime* ru
 static bool SaveInputsOneByOne(const Runtime* runtime) {
     for (uint32_t c = 0; c < runtime->GetInputCount(); ++c) {
         auto t = runtime->GetInputTensor(c);
-        auto& shape = t->GetShape();
+        auto shape = t->GetShape();
 
-        auto bytes = shape.GetBytesIncludingPadding();
+        auto bytes = shape->GetBytesIncludingPadding();
         vector<char> buffer(bytes);
 
-#ifdef PPLNN_USE_RISCV
-        TensorShape& src_desc = t->GetShape();
-#else
-        TensorShape src_desc = t->GetShape();
-#endif
+        TensorShape src_desc = *t->GetShape();
         src_desc.SetDataFormat(DATAFORMAT_NDARRAY);
         auto status = t->ConvertToHost(buffer.data(), src_desc);
         if (status != RC_SUCCESS) {
@@ -583,9 +670,9 @@ static bool SaveInputsOneByOne(const Runtime* runtime) {
             return false;
         }
 
-        const char* data_type_str = FindDataTypeStr(shape.GetDataType());
+        const char* data_type_str = FindDataTypeStr(shape->GetDataType());
         if (!data_type_str) {
-            LOG(ERROR) << "unsupported data type[" << shape.GetDataType();
+            LOG(ERROR) << "unsupported data type[" << shape->GetDataType();
             return false;
         }
 
@@ -615,14 +702,10 @@ static bool SaveInputsAllInOne(const Runtime* runtime) {
 
     for (uint32_t c = 0; c < runtime->GetInputCount(); ++c) {
         auto t = runtime->GetInputTensor(c);
-        auto bytes = t->GetShape().GetBytesIncludingPadding();
+        auto bytes = t->GetShape()->GetBytesIncludingPadding();
         vector<char> buffer(bytes);
 
-#ifdef PPLNN_USE_RISCV
-        TensorShape& src_desc = t->GetShape();
-#else
-        TensorShape src_desc = t->GetShape();
-#endif
+        TensorShape src_desc = *t->GetShape();
         src_desc.SetDataFormat(DATAFORMAT_NDARRAY);
         auto status = t->ConvertToHost((void*)buffer.data(), src_desc);
         if (status != RC_SUCCESS) {
@@ -640,15 +723,15 @@ static bool SaveOutputsOneByOne(const Runtime* runtime) {
     for (uint32_t c = 0; c < runtime->GetOutputCount(); ++c) {
         auto t = runtime->GetOutputTensor(c);
 
-#ifdef PPLNN_USE_RISCV
-        TensorShape& dst_desc = t->GetShape();
-#else
-        TensorShape dst_desc = t->GetShape();
+        TensorShape dst_desc = *t->GetShape();
         dst_desc.SetDataFormat(DATAFORMAT_NDARRAY);
-#endif
+        // convert fp16 to fp32
+        if (dst_desc.GetDataType() == DATATYPE_FLOAT16) {
+            dst_desc.SetDataType(DATATYPE_FLOAT32);
+        }
+
         auto bytes = dst_desc.GetBytesIncludingPadding();
         vector<char> buffer(bytes);
-
         auto status = t->ConvertToHost(buffer.data(), dst_desc);
         if (status != RC_SUCCESS) {
             LOG(ERROR) << "convert data of tensor[" << t->GetName() << "] failed: " << GetRetCodeStr(status);
@@ -676,16 +759,16 @@ static void PrintInputOutputInfo(const Runtime* runtime) {
         LOG(INFO) << "    name: " << tensor->GetName();
 
         string dims_str;
-        auto& shape = tensor->GetShape();
-        for (uint32_t j = 0; j < shape.GetDimCount(); ++j) {
-            dims_str += " " + ToString(shape.GetDim(j));
+        auto shape = tensor->GetShape();
+        for (uint32_t j = 0; j < shape->GetDimCount(); ++j) {
+            dims_str += " " + ToString(shape->GetDim(j));
         }
         LOG(INFO) << "    dim(s):" << dims_str;
 
-        LOG(INFO) << "    DataType: " << GetDataTypeStr(shape.GetDataType());
-        LOG(INFO) << "    DataFormat: " << GetDataFormatStr(shape.GetDataFormat());
-        LOG(INFO) << "    NumBytesIncludePadding: " << shape.GetBytesIncludingPadding();
-        LOG(INFO) << "    NumBytesExcludePadding: " << shape.GetBytesExcludingPadding();
+        LOG(INFO) << "    DataType: " << GetDataTypeStr(shape->GetDataType());
+        LOG(INFO) << "    DataFormat: " << GetDataFormatStr(shape->GetDataFormat());
+        LOG(INFO) << "    NumBytesIncludePadding: " << shape->GetBytesIncludingPadding();
+        LOG(INFO) << "    NumBytesExcludePadding: " << shape->GetBytesExcludingPadding();
     }
 
     LOG(INFO) << "----- output info -----";
@@ -695,16 +778,16 @@ static void PrintInputOutputInfo(const Runtime* runtime) {
         LOG(INFO) << "    name: " << tensor->GetName();
 
         string dims_str;
-        auto& shape = tensor->GetShape();
-        for (uint32_t j = 0; j < shape.GetDimCount(); ++j) {
-            dims_str += " " + ToString(shape.GetDim(j));
+        auto shape = tensor->GetShape();
+        for (uint32_t j = 0; j < shape->GetDimCount(); ++j) {
+            dims_str += " " + ToString(shape->GetDim(j));
         }
         LOG(INFO) << "    dim(s):" << dims_str;
 
-        LOG(INFO) << "    DataType: " << GetDataTypeStr(shape.GetDataType());
-        LOG(INFO) << "    DataFormat: " << GetDataFormatStr(shape.GetDataFormat());
-        LOG(INFO) << "    NumBytesIncludePadding: " << shape.GetBytesIncludingPadding();
-        LOG(INFO) << "    NumBytesExcludePadding: " << shape.GetBytesExcludingPadding();
+        LOG(INFO) << "    DataType: " << GetDataTypeStr(shape->GetDataType());
+        LOG(INFO) << "    DataFormat: " << GetDataFormatStr(shape->GetDataFormat());
+        LOG(INFO) << "    NumBytesIncludePadding: " << shape->GetBytesIncludingPadding();
+        LOG(INFO) << "    NumBytesExcludePadding: " << shape->GetBytesExcludingPadding();
     }
 
     LOG(INFO) << "----------------------";
@@ -766,48 +849,119 @@ static void PrintProfilingStatistics(const ProfilingStatistics& stat, double run
 }
 #endif
 
-static bool ParseInputShapes(const string& shape_str, vector<vector<int64_t>>* input_shapes) {
-    bool ok = true;
-
-    vector<string> input_shape_list;
-    SplitString(shape_str.data(), shape_str.size(), ",", 1,
-                [&ok, &input_shape_list](const char* s, unsigned int l) -> bool {
-                    if (l > 0) {
-                        input_shape_list.emplace_back(s, l);
-                        return true;
-                    }
-                    LOG(ERROR) << "empty shape in option '--input-shapes'";
-                    ok = false;
-                    return false;
-                });
-    if (!ok) {
-        return false;
+#ifdef PPLNN_USE_X86
+static bool Defragment(Runtime* runtime) {
+    for (uint32_t i = 0; i < runtime->GetInputCount(); ++i) {
+        runtime->GetInputTensor(i)->FreeBuffer();
+    }
+    for (uint32_t i = 0; i < runtime->GetOutputCount(); ++i) {
+        runtime->GetOutputTensor(i)->FreeBuffer();
     }
 
-    for (auto x = input_shape_list.begin(); x != input_shape_list.end(); ++x) {
-        ok = true;
-        vector<int64_t> shape;
-        SplitString(x->data(), x->size(), "_", 1, [&ok, &shape](const char* s, unsigned int l) -> bool {
-            if (l > 0) {
-                int64_t dim = atol(string(s, l).c_str());
-                shape.push_back(dim);
-                return true;
+    for (uint32_t i = 0; i < runtime->GetDeviceContextCount(); ++i) {
+        auto ctx = runtime->GetDeviceContext(i);
+        // currently only x86 supports defragmentation
+        if (strcmp(ctx->GetType(), "x86") == 0) {
+            auto status = ctx->Configure(X86_DEV_CONF_MEM_DEFRAG);
+            if (status != RC_SUCCESS) {
+                LOG(ERROR) << "x86 defragment failed: " << GetRetCodeStr(status);
+                return false;
             }
-            LOG(ERROR) << "illegal dim format.";
-            ok = false;
-            return false;
-        });
-        if (!ok) {
-            return false;
         }
-
-        input_shapes->push_back(shape);
     }
 
     return true;
 }
 
+static bool SetInputs(const vector<string>& input_data, Runtime* runtime) {
+    if (input_data.size() != runtime->GetInputCount()) {
+        LOG(ERROR) << "number of input data [" << input_data.size() << "] != runtime input count ["
+                   << runtime->GetInputCount() << "]";
+        return false;
+    }
+
+    for (uint32_t i = 0; i < runtime->GetInputCount(); ++i) {
+        auto t = runtime->GetInputTensor(i);
+        auto status = t->ReallocBuffer();
+        if (status != RC_SUCCESS) {
+            LOG(ERROR) << "realloc buffer for input[" << t->GetName() << "] failed: " << GetRetCodeStr(status);
+            return false;
+        }
+
+        TensorShape src_desc = *t->GetShape();
+        src_desc.SetDataFormat(DATAFORMAT_NDARRAY);
+        status = t->ConvertFromHost(input_data[i].data(), src_desc);
+        if (status != RC_SUCCESS) {
+            LOG(ERROR) << "set input [" << t->GetName() << "] failed: " << GetRetCodeStr(status);
+            return false;
+        }
+    }
+
+    return true;
+}
+#endif
+
+static bool Profiling(const vector<string>& input_data, Runtime* runtime) {
+    if (g_flag_warmup_iterations > 0) {
+        LOG(INFO) << "Warm up start for " << g_flag_warmup_iterations << " times.";
+
+        for (uint32_t i = 0; i < g_flag_warmup_iterations; ++i) {
+#ifdef PPLNN_USE_X86
+            if (!Defragment(runtime)) {
+                LOG(ERROR) << "Defragment failed.";
+                return false;
+            }
+
+            // set inputs again after defragmentation
+            if (!SetInputs(input_data, runtime)) {
+                LOG(ERROR) << "SetInputs failed.";
+                return false;
+            }
+#endif
+            runtime->Run();
+        }
+        LOG(INFO) << "Warm up end.";
+    }
+
+#ifdef PPLNN_ENABLE_KERNEL_PROFILING
+    auto status = runtime->Configure(RUNTIME_CONF_SET_KERNEL_PROFILING_FLAG, true);
+    if (status != RC_SUCCESS) {
+        LOG(WARNING) << "enable profiling failed: " << GetRetCodeStr(status);
+    }
+#endif
+    LOG(INFO) << "Profiling start";
+
+    double run_dur = 0;
+    uint32_t run_count = 0;
+    while (run_dur < g_flag_min_profiling_seconds * 1000 || run_count < g_flag_min_profiling_iterations) {
+        auto run_begin_ts = std::chrono::system_clock::now();
+        runtime->Run();
+        auto run_end_ts = std::chrono::system_clock::now();
+        auto diff = std::chrono::duration_cast<std::chrono::microseconds>(run_end_ts - run_begin_ts);
+        run_dur += (double)diff.count() / 1000;
+        run_count += 1;
+    }
+
+    LOG(INFO) << "Duration: " << run_dur << " ms";
+
+#ifdef PPLNN_ENABLE_KERNEL_PROFILING
+    ProfilingStatistics stat;
+    status = runtime->GetProfilingStatistics(&stat);
+    if (status != RC_SUCCESS) {
+        LOG(WARNING) << "Get profiling statistics failed: " << GetRetCodeStr(status);
+    }
+    PrintProfilingStatistics(stat, run_dur, run_count);
+#else
+    LOG(INFO) << "Average run cost: " << (run_dur / run_count) << " ms.";
+#endif
+
+    LOG(INFO) << "Profiling End";
+    return true;
+}
+
 int main(int argc, char* argv[]) {
+    RetCode status;
+
     simple_flags::parse_args(argc, argv);
     if (!simple_flags::get_unknown_flags().empty()) {
         string content;
@@ -830,6 +984,8 @@ int main(int argc, char* argv[]) {
     }
 
     LOG(INFO) << "ppl.nn version: " << GetVersionString();
+
+    auto prepare_begin_ts = std::chrono::system_clock::now();
 
     vector<unique_ptr<Engine>> engines;
     if (!RegisterEngines(&engines)) {
@@ -872,24 +1028,34 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    vector<string> input_data; // store input data for profiling
     if (!g_flag_input.empty()) {
-        if (!SetInputsAllInOne(g_flag_input, input_shapes, runtime.get())) {
+        if (!SetInputsAllInOne(g_flag_input, input_shapes, runtime.get(), &input_data)) {
             LOG(ERROR) << "SetInputsAllInOne failed.";
             return -1;
         }
     } else if (!g_flag_inputs.empty()) {
-        if (!SetInputsOneByOne(g_flag_inputs, input_shapes, runtime.get())) {
+        if (!SetInputsOneByOne(g_flag_inputs, input_shapes, runtime.get(), &input_data)) {
             LOG(ERROR) << "SetInputsOneByOne failed.";
             return -1;
         }
     } else if (!g_flag_reshaped_inputs.empty()) {
-        if (!SetReshapedInputsOneByOne(g_flag_reshaped_inputs, runtime.get())) {
+        if (!SetReshapedInputsOneByOne(g_flag_reshaped_inputs, runtime.get(), &input_data)) {
             LOG(ERROR) << "SetReshapedInputsOneByOne failed.";
             return -1;
         }
     } else {
-        if (!SetRandomInputs(input_shapes, runtime.get())) {
+        if (!SetRandomInputs(input_shapes, runtime.get(), &input_data)) {
             LOG(ERROR) << "SetRandomInputs failed.";
+            return -1;
+        }
+    }
+
+    for (uint32_t i = 0; i < runtime->GetInputCount(); ++i) {
+        auto in = runtime->GetInputTensor(i);
+        auto shape = in->GetShape();
+        if (shape->GetElementsIncludingPadding() == 0) {
+            LOG(ERROR) << "input tensor[" << in->GetName() << "] is empty.";
             return -1;
         }
     }
@@ -904,20 +1070,12 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    for (uint32_t i = 0; i < runtime->GetInputCount(); ++i) {
-        auto in = runtime->GetInputTensor(i);
-        auto& shape = in->GetShape();
-        if (shape.GetElementsIncludingPadding() == 0) {
-            LOG(ERROR) << "input tensor[" << in->GetName() << "] is empty.";
-            return -1;
-        }
-    }
+    auto prepare_end_ts = std::chrono::system_clock::now();
+    auto prepare_diff = std::chrono::duration_cast<std::chrono::microseconds>(prepare_end_ts - prepare_begin_ts);
+    LOG(INFO) << "Prepare costs: " << (float)prepare_diff.count() / 1000 << " ms.";
 
     auto run_begin_ts = std::chrono::system_clock::now();
-    auto status = runtime->Run();
-    if (status == RC_SUCCESS) {
-        status = runtime->Sync();
-    }
+    status = runtime->Run();
     auto run_end_ts = std::chrono::system_clock::now();
     if (status != RC_SUCCESS) {
         LOG(ERROR) << "Run() failed: " << GetRetCodeStr(status);
@@ -938,52 +1096,10 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << "Run ok";
 
     if (g_flag_enable_profiling) {
-        if (g_flag_warmup_times > 0) {
-            LOG(INFO) << "Warm up start for " << g_flag_warmup_times << " times.";
-            for (uint32_t i = 0; i < g_flag_warmup_times; ++i) {
-                auto status = runtime->Run();
-                if (status == RC_SUCCESS) {
-                    status = runtime->Sync();
-                }
-            }
-            LOG(INFO) << "Warm up end.";
+        if (!Profiling(input_data, runtime.get())) {
+            LOG(ERROR) << "Profiling() failed.";
+            return -1;
         }
-#ifdef PPLNN_ENABLE_KERNEL_PROFILING
-        auto status = runtime->Configure(RUNTIME_CONF_SET_KERNEL_PROFILING_FLAG, true);
-        if (status != RC_SUCCESS) {
-            LOG(WARNING) << "enable profiling failed: " << GetRetCodeStr(status);
-        }
-#endif
-        LOG(INFO) << "Profiling start";
-
-        double run_dur = 0;
-        int32_t run_count = 0;
-        while (run_dur < g_flag_min_profiling_time * 1000) {
-            run_begin_ts = std::chrono::system_clock::now();
-            auto status = runtime->Run();
-            if (status == RC_SUCCESS) {
-                status = runtime->Sync();
-            }
-            run_end_ts = std::chrono::system_clock::now();
-            diff = std::chrono::duration_cast<std::chrono::microseconds>(run_end_ts - run_begin_ts);
-            run_dur += (double)diff.count() / 1000;
-            run_count += 1;
-        }
-
-        LOG(INFO) << "Duration: " << run_dur << " ms";
-
-#ifdef PPLNN_ENABLE_KERNEL_PROFILING
-        ProfilingStatistics stat;
-        status = runtime->GetProfilingStatistics(&stat);
-        if (status != RC_SUCCESS) {
-            LOG(WARNING) << "Get profiling statistics failed: " << GetRetCodeStr(status);
-        }
-        PrintProfilingStatistics(stat, run_dur, run_count);
-#else
-        LOG(INFO) << "Average run cost: " << (run_dur / run_count) << " ms.";
-#endif
-
-        LOG(INFO) << "Profiling End";
     }
 
     return 0;

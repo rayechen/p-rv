@@ -28,27 +28,33 @@ using namespace ppl::nn::common;
 namespace ppl { namespace nn { namespace cuda {
 
 RetCode BatchNormalizationOp::Init(const OptKernelOptions& options) {
-    auto status = GenericLoadParam<BatchNormalizationParam>(options, &param_);
+    auto status = GenericLoadParam<BatchNormalizationParam>(options, &param_.param);
     if (status != RC_SUCCESS) {
         LOG(ERROR) << "load param failed: " << GetRetCodeStr(status);
         return status;
     }
 
-    infer_type_func_ = [this](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
-        auto& in_shape = info->GetInput<TensorImpl>(0)->GetShape();
+    infer_type_func_ = [](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
+        auto& in_shape = *info->GetInput<TensorImpl>(0)->GetShape();
         type = in_shape.GetDataType();
         ppl::common::RetCode status;
         if (type == DATATYPE_UNKNOWN) {
             status = InferInheritedType(info);
         } else if (type == DATATYPE_INT8) {
             status = CopyQuantType(info, quant);
+            for (uint32_t i = 1; i < 5; ++i) {
+                if (info->GetInputCount() > i) {
+                    auto shape = info->GetInput<TensorImpl>(i)->GetShape();
+                    shape->SetDataType(ppl::common::DATATYPE_FLOAT32);
+                }
+            }
         } else {
             status = InferDefaultType(info, type);
         }
         return status;
     };
 
-    infer_dims_func_ = [this](InputOutputInfo* info) -> RetCode {
+    infer_dims_func_ = [](InputOutputInfo* info) -> RetCode {
         return oputils::ReshapeBatchNormalization(info, nullptr);
     };
 

@@ -23,10 +23,7 @@
 
 namespace ppl { namespace kernel { namespace riscv {
 
-ppl::common::RetCode sigmoid_fp16(
-    const ppl::nn::TensorShape *x_shape,
-    const __fp16 *x,
-    __fp16 *y);
+ppl::common::RetCode sigmoid_fp16(const ppl::nn::TensorShape* x_shape, const __fp16* x, __fp16* y);
 
 }}}; // namespace ppl::kernel::riscv
 

@@ -41,14 +41,14 @@ RetCode MulOp::Init(const OptKernelOptions& options) {
         if (type == DATATYPE_UNKNOWN) {
             status = InferHighestType(info, mask_);
         } else if (type == DATATYPE_INT8) {
-            status = UnifyToOutputQuant(info, quant);
+            status = CopyQuantType(info, quant);
         } else {
             status = InferDefaultType(info, type);
         }
         return status;
     };
 
-    infer_dims_func_ = [this](InputOutputInfo* info) -> RetCode {
+    infer_dims_func_ = [](InputOutputInfo* info) -> RetCode {
         return oputils::ReshapeAdd(info, nullptr);
     };
 

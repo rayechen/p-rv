@@ -25,17 +25,19 @@ namespace ppl { namespace nn { namespace riscv {
 
 #define RISCV_DEFAULT_ALIGNMENT 64u
 
-class RISCVEngineContext final : public EngineContext {
+class RiscvEngineContext final : public EngineContext {
 public:
-    RISCVEngineContext(const std::string& name, RISCVDevice* device)
-        : name_(name), device_(device) {}
+    RiscvEngineContext(RiscvDevice* device) : device_(device) {}
     Device* GetDevice() override {
         return device_;
     }
 
+    const char* GetName() const override {
+        return "riscv";
+    }
+
 private:
-    const std::string name_;
-    RISCVDevice *device_;
+    RiscvDevice* device_;
 };
 
 }}} // namespace ppl::nn::riscv

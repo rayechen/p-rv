@@ -29,10 +29,11 @@ using namespace ppl::common;
 namespace ppl { namespace nn { namespace cuda {
 
 double DeformConvAlgorithm::ExcuteTimer(const ir::Node* node, OptKernelOptions& options) {
+    options.compile_set->emplace(node->GetId());
     return 1e-5;
 }
 
-RetCode DeformConvAlgorithm::ModifyParam(const ir::Node* node, OptKernelOptions& options) {
+RetCode DeformConvAlgorithm::ModifyParam(ir::Node* node, OptKernelOptions& options) {
     this->param_ = (reinterpret_cast<ppl::nn::common::MMCVModulatedDeformConv2dParam*>(options.param));
     auto topo = options.graph->topo.get();
     auto data = options.graph->data.get();
@@ -40,7 +41,7 @@ RetCode DeformConvAlgorithm::ModifyParam(const ir::Node* node, OptKernelOptions&
     auto weight_node = topo->GetNodeById(weight_edge->GetProducer());
 
     RetCode status;
-    
+
     // Split weight format to group padding
     auto stream = options.device->GetStream();
     auto weight_iter = data->constants.find(weight_node->GetInput(0));
@@ -48,10 +49,10 @@ RetCode DeformConvAlgorithm::ModifyParam(const ir::Node* node, OptKernelOptions&
         options.info->constants.find(weight_node->GetInput(0)) == options.info->constants.end()) {
         auto preedge_id = weight_node->GetInput(0);
         auto postedge_id = node->GetInput(3);
-        auto preshape = options.tensors->find(preedge_id)->second->GetShape();
-        auto postshape = options.tensors->find(postedge_id)->second->GetShape();
+        const TensorShape& preshape = *options.tensors->find(preedge_id)->second->GetShape();
+        const TensorShape& postshape = *options.tensors->find(postedge_id)->second->GetShape();
         auto size = postshape.GetElementsIncludingPadding();
-        size = (size / postshape.GetDim(0) + 7)/ 8 * 8 * postshape.GetDim(0);
+        size = (size / postshape.GetDim(0) + 7) / 8 * 8 * postshape.GetDim(0);
 
         RuntimeConstantInfo weight_constat_info;
         {
@@ -75,9 +76,8 @@ RetCode DeformConvAlgorithm::ModifyParam(const ir::Node* node, OptKernelOptions&
         }
         PPLCUDADeformConvModifyWeights(stream, &postshape, temp_buffer.addr, weight_constat_info.GetBufferDesc().addr);
 
-
         options.info->constants.emplace(preedge_id, std::move(weight_constat_info));
-        options.tensors->find(preedge_id)->second->GetShape() = postshape;
+        *options.tensors->find(preedge_id)->second->GetShape() = postshape;
         options.quants->at(preedge_id).format = postshape.GetDataFormat();
         options.quants->at(preedge_id).type = postshape.GetDataType();
     }
@@ -86,19 +86,19 @@ RetCode DeformConvAlgorithm::ModifyParam(const ir::Node* node, OptKernelOptions&
 }
 
 void DeformConvAlgorithm::ReshapeOnEdges(const ir::Node* node, std::map<edgeid_t, std::unique_ptr<TensorImpl>>* tensors,
-                                       dataformat_t input_format, dataformat_t output_format) {
+                                         dataformat_t input_format, dataformat_t output_format) {
     for (uint32_t i = 0; i < node->GetInputCount(); ++i) { // only reset formats of input0 and weight
         auto edge_id = node->GetInput(i);
         if (edge_id == INVALID_EDGEID) {
             continue;
         }
-        auto shape = &tensors->find(edge_id)->second->GetShape();
+        auto shape = tensors->find(edge_id)->second->GetShape();
         shape->SetDataFormat(input_format);
     }
 
     for (uint32_t i = 0; i < node->GetOutputCount(); ++i) {
         auto edge_id = node->GetOutput(i);
-        auto shape = &tensors->find(edge_id)->second->GetShape();
+        auto shape = tensors->find(edge_id)->second->GetShape();
         shape->SetDataFormat(output_format);
     }
     return;

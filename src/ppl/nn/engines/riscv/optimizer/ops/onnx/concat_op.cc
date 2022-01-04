@@ -43,63 +43,50 @@ RetCode ConcatOp::Init(const OptKernelOptions& options) {
 RetCode ConcatOp::SelectFormat(const InputOutputInfo& info, vector<dataformat_t>* selected_input_formats,
                                vector<dataformat_t>* selected_output_formats) {
     const uint32_t input_count = info.GetInputCount();
-    bool input_all_the_same = true;
-    for (uint32_t i = 0; i < input_count - 1; i++) {
-        if (info.GetInput<TensorImpl>(i)->GetShape().GetDataFormat() != info.GetInput<TensorImpl>(i + 1)->GetShape().GetDataFormat()) {
-            input_all_the_same = false;
+    if (DATAFORMAT_N8CX == selected_input_formats->at(0)) {
+        for (uint32_t i = 0; i < input_count; i++) {
+            selected_input_formats->at(i) = DATAFORMAT_N8CX;
         }
-    }
-    if (input_all_the_same) {
-        if (info.GetInput<TensorImpl>(0)->GetShape().GetDataFormat() == DATAFORMAT_N8CX) {
-            for (uint32_t i = 0; i < input_count; i++) {
-                selected_input_formats->at(i) = DATAFORMAT_N8CX;
-            }
-            selected_output_formats->at(0) = DATAFORMAT_N8CX;
-        } else if (info.GetInput<TensorImpl>(0)->GetShape().GetDataFormat() == DATAFORMAT_N4CX) {
-            for (uint32_t i = 0; i < input_count; i++) {
-                selected_input_formats->at(i) = DATAFORMAT_N4CX;
-            }
-            selected_output_formats->at(0) = DATAFORMAT_N4CX;
-        } else if (info.GetInput<TensorImpl>(0)->GetShape().GetDataFormat() == DATAFORMAT_N2CX) {
-            for (uint32_t i = 0; i < input_count; i++) {
-                selected_input_formats->at(i) = DATAFORMAT_N2CX;
-            }
-            selected_output_formats->at(0) = DATAFORMAT_N2CX;            
+        selected_output_formats->at(0) = DATAFORMAT_N8CX;
+    } else if (DATAFORMAT_N4CX == selected_input_formats->at(0)) {
+        for (uint32_t i = 0; i < input_count; i++) {
+            selected_input_formats->at(i) = DATAFORMAT_N4CX;
         }
+        selected_output_formats->at(0) = DATAFORMAT_N4CX;
+    } else if (DATAFORMAT_N2CX == selected_input_formats->at(0)) {
+        for (uint32_t i = 0; i < input_count; i++) {
+            selected_input_formats->at(i) = DATAFORMAT_N2CX;
+        }
+        selected_output_formats->at(0) = DATAFORMAT_N2CX;
+    } else {
+        for (uint32_t i = 0; i < input_count; i++) {
+            selected_input_formats->at(i) = DATAFORMAT_NDARRAY;
+        }
+        selected_output_formats->at(0) = DATAFORMAT_NDARRAY;
     }
 
     return RC_SUCCESS;
 }
 
-RetCode ConcatOp::SelectDataType(const InputOutputInfo& info,
-                                 std::vector<dataformat_t>* selected_input_data_types,
+RetCode ConcatOp::SelectDataType(const InputOutputInfo& info, std::vector<dataformat_t>* selected_input_data_types,
                                  std::vector<dataformat_t>* selected_output_data_types) {
-
     const uint32_t input_count = info.GetInputCount();
-    bool input_all_the_same = true;
-    for (uint32_t i = 0; i < input_count - 1; i++) {
-        if (info.GetInput<TensorImpl>(i)->GetShape().GetDataType() != info.GetInput<TensorImpl>(i + 1)->GetShape().GetDataType()) {
-            input_all_the_same = false;
+    if (DATATYPE_FLOAT16 == selected_input_data_types->at(0)) {
+        for (uint32_t i = 0; i < input_count; i++) {
+            selected_input_data_types->at(i) = DATATYPE_FLOAT16;
         }
+        selected_output_data_types->at(0) = DATATYPE_FLOAT16;
+    } else if (DATATYPE_FLOAT32 == selected_input_data_types->at(0)) {
+        for (uint32_t i = 0; i < input_count; i++) {
+            selected_input_data_types->at(i) = DATATYPE_FLOAT32;
+        }
+        selected_output_data_types->at(0) = DATATYPE_FLOAT32;
+    } else if (DATATYPE_INT64 == selected_input_data_types->at(0)) {
+        for (uint32_t i = 0; i < input_count; i++) {
+            selected_input_data_types->at(i) = DATATYPE_INT64;
+        }
+        selected_output_data_types->at(0) = DATATYPE_INT64;
     }
-    if (input_all_the_same) {
-        if (info.GetInput<TensorImpl>(0)->GetShape().GetDataType() == DATATYPE_FLOAT16) {
-            for (uint32_t i = 0; i < input_count; i++) {
-                selected_input_data_types->at(i) = DATATYPE_FLOAT16;
-            }
-            selected_output_data_types->at(0) = DATATYPE_FLOAT16;
-        } else if (info.GetInput<TensorImpl>(0)->GetShape().GetDataType() == DATATYPE_FLOAT32) {
-            for (uint32_t i = 0; i < input_count; i++) {
-                selected_input_data_types->at(i) = DATATYPE_FLOAT32;
-            }
-            selected_output_data_types->at(0) = DATATYPE_FLOAT32;
-        } else if (info.GetInput<TensorImpl>(0)->GetShape().GetDataType() == DATATYPE_INT64) {
-            for (uint32_t i = 0; i < input_count; i++) {
-                selected_input_data_types->at(i) = DATATYPE_INT64;
-            }
-            selected_output_data_types->at(0) = DATATYPE_INT64;
-        }
-    }    
 
     return RC_SUCCESS;
 }
@@ -108,4 +95,4 @@ KernelImpl* ConcatOp::CreateKernelImpl() const {
     return CreateKernelImplWithParam<ConcatKernel>(param_.get());
 }
 
-}}};
+}}}; // namespace ppl::nn::riscv

@@ -39,8 +39,8 @@ static RetCode ParseParam(const rapidjson::Value& v, QuantParam* param) {
         if (it->value.IsBool()) {
             auto field_value = it->value.GetBool();
             value.content.assign((const char*)&field_value, sizeof(field_value));
-        } else if (it->value.IsFloat()) {
-            auto field_value = it->value.GetFloat();
+        } else if (it->value.IsDouble()) {
+            auto field_value = it->value.GetDouble();
             value.content.assign((const char*)&field_value, sizeof(field_value));
         } else if (it->value.IsInt64()) {
             auto field_value = it->value.GetInt64();
@@ -50,7 +50,7 @@ static RetCode ParseParam(const rapidjson::Value& v, QuantParam* param) {
         } else if (it->value.IsArray()) {
             value.content.clear();
             for (auto iter = it->value.GetArray().Begin(); iter != it->value.GetArray().End(); ++iter) {
-                auto field_value = iter->GetFloat();
+                auto field_value = iter->GetDouble();
                 value.content.append((const char*)&field_value, sizeof(field_value));
             }
         } else {
@@ -59,53 +59,6 @@ static RetCode ParseParam(const rapidjson::Value& v, QuantParam* param) {
         }
 
         param->fields.insert(make_pair(key, value));
-    }
-
-    return RC_SUCCESS;
-}
-
-static RetCode DoParse(const string& buf, QuantParamInfo* info) {
-    rapidjson::Document d;
-
-    d.Parse(buf.c_str());
-    if (d.HasParseError()) {
-        LOG(ERROR) << "parse quant file failed: position[" << d.GetErrorOffset() << "], code[" << d.GetParseError()
-                   << "]";
-        return RC_INVALID_VALUE;
-    }
-
-    if (!d.IsObject()) {
-        LOG(ERROR) << "quant file content is not an object.";
-        return RC_INVALID_VALUE;
-    }
-
-    for (auto it = d.MemberBegin(); it != d.MemberEnd(); ++it) {
-        const string object_name(it->name.GetString(), it->name.GetStringLength());
-        if (!it->value.IsObject()) {
-            LOG(ERROR) << "value of object[" << object_name << "] is not an object.";
-            return RC_INVALID_VALUE;
-        }
-        const bool is_tensor_set = object_name == "quant_info";
-        const bool is_node_set = object_name == "op_info";
-        if (!is_tensor_set && !is_node_set) {
-            LOG(ERROR) << "name of object[" << object_name << "] is not meaningful.";
-            return RC_INVALID_VALUE;            
-        }
-        auto& quant_info = is_tensor_set ? info->tensor_params : info->node_params;
-        for (auto iter = it->value.MemberBegin(); iter != it->value.MemberEnd(); ++iter) {
-            const string quant_name(iter->name.GetString(), iter->name.GetStringLength());
-            if (!iter->value.IsObject()) {
-                LOG(ERROR) << "value of sub-object[" << quant_name << "] is not an object.";
-                return RC_INVALID_VALUE;
-            }
-            QuantParam param;
-            auto status = ParseParam(iter->value, &param);
-            if (status != RC_SUCCESS) {
-                LOG(ERROR) << "ParseParam of [" << quant_name << "] failed: " << GetRetCodeStr(status);
-                return status;
-            }
-            quant_info.insert(make_pair(quant_name, param));
-        }
     }
 
     return RC_SUCCESS;
@@ -128,14 +81,61 @@ static RetCode ReadFileContent(const char* fname, string* buf) {
     return RC_SUCCESS;
 }
 
-RetCode QuantParamParser::Parse(const char* fname, QuantParamInfo* info) {
+RetCode QuantParamParser::ParseBuffer(const char* buf, QuantParamInfo* info) {
+    rapidjson::Document d;
+
+    d.Parse(buf);
+    if (d.HasParseError()) {
+        LOG(ERROR) << "parse quant file failed: position[" << d.GetErrorOffset() << "], code[" << d.GetParseError()
+                   << "]";
+        return RC_INVALID_VALUE;
+    }
+
+    if (!d.IsObject()) {
+        LOG(ERROR) << "quant file content is not an object.";
+        return RC_INVALID_VALUE;
+    }
+
+    for (auto it = d.MemberBegin(); it != d.MemberEnd(); ++it) {
+        const string object_name(it->name.GetString(), it->name.GetStringLength());
+        if (!it->value.IsObject()) {
+            LOG(ERROR) << "value of object[" << object_name << "] is not an object.";
+            return RC_INVALID_VALUE;
+        }
+        const bool is_tensor_set = (object_name == "quant_info");
+        const bool is_node_set = (object_name == "op_info");
+        if (!is_tensor_set && !is_node_set) {
+            LOG(ERROR) << "name of object[" << object_name << "] is not meaningful.";
+            return RC_INVALID_VALUE;
+        }
+        auto& quant_info = is_tensor_set ? info->tensor_params : info->node_params;
+        for (auto iter = it->value.MemberBegin(); iter != it->value.MemberEnd(); ++iter) {
+            const string quant_name(iter->name.GetString(), iter->name.GetStringLength());
+            if (!iter->value.IsObject()) {
+                LOG(ERROR) << "value of sub-object[" << quant_name << "] is not an object.";
+                return RC_INVALID_VALUE;
+            }
+            QuantParam param;
+            auto status = ParseParam(iter->value, &param);
+            if (status != RC_SUCCESS) {
+                LOG(ERROR) << "ParseParam of [" << quant_name << "] failed: " << GetRetCodeStr(status);
+                return status;
+            }
+            quant_info.insert(make_pair(quant_name, param));
+        }
+    }
+
+    return RC_SUCCESS;
+}
+
+RetCode QuantParamParser::ParseFile(const char* fname, QuantParamInfo* info) {
     string buf;
     auto status = ReadFileContent(fname, &buf);
     if (status != RC_SUCCESS) {
         return status;
     }
 
-    status = DoParse(buf, info);
+    status = ParseBuffer(buf.c_str(), info);
     if (status != RC_SUCCESS) {
         LOG(ERROR) << "parse quant file[" << fname << "] failed: " << GetRetCodeStr(status);
     }

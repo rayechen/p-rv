@@ -18,41 +18,33 @@
 #ifndef _ST_HPC_PPL_NN_ENGINES_RISCV_OPTIMIZER_OPT_GRAPH_H_
 #define _ST_HPC_PPL_NN_ENGINES_RISCV_OPTIMIZER_OPT_GRAPH_H_
 
+#include <memory>
+
 #include "ppl/nn/ir/graph.h"
 #include "ppl/nn/engines/riscv/riscv_device.h"
 #include "ppl/nn/engines/riscv/riscv_engine_options.h"
 #include "ppl/nn/runtime/runtime_partition_info.h"
 #include "ppl/nn/engines/riscv/optimizer/opt_kernel.h"
-#include <memory>
 
 namespace ppl { namespace nn { namespace riscv {
 
 class OptGraph final {
 public:
-    ppl::common::RetCode Init(ir::Graph*, utils::SharedResource*, RuntimePartitionInfo*, RISCVEngineOptions*);
-    ppl::common::RetCode DoOptimize(RISCVDevice*);
+    ppl::common::RetCode Init(ir::Graph*, utils::SharedResource*, RuntimePartitionInfo*, RiscvEngineOptions* options);
+    ppl::common::RetCode DoOptimize(RiscvDevice*);
 
 private:
     ppl::common::RetCode InitKernels(const ir::Graph* graph);
     ppl::common::RetCode InitTensorImpls();
-    ppl::common::RetCode AddReorderOp(const OptKernelOptions& options, const edgeid_t& edge_id, const nodeid_t& node_id,
-                                      const int32_t& reorder_type, const ppl::common::dataformat_t& reorder_src_format,
-                                      const ppl::common::dataformat_t& reorder_dst_format,
-                                      const ppl::common::datatype_t& reorder_src_type,
-                                      const ppl::common::datatype_t& reorder_dst_type);
-    ppl::common::RetCode LayoutOptimize(const OptKernelOptions& options);
-    ppl::common::RetCode TryToInferType(RISCVDevice* device);
-    ppl::common::RetCode TryToInferDims(RISCVDevice* device);
-
-    ppl::common::RetCode CreateRISCVOptKernel(const OptKernelOptions& options, const ir::Node* node,
-                                            RISCVOptKernel** kernel);
+    ppl::common::RetCode TryToInferType(RiscvDevice* device);
+    ppl::common::RetCode TryToInferDims(RiscvDevice* device);
 
 private:
     utils::SharedResource* resource_ = nullptr;
     ir::Graph* graph_ = nullptr;
-    RuntimePartitionInfo* info_ = nullptr;
+    nn::RuntimePartitionInfo* info_ = nullptr;
     std::map<edgeid_t, std::unique_ptr<TensorImpl>> tensor_impls_;
-    RISCVEngineOptions* options_;
+    RiscvEngineOptions* options_ = nullptr;
 };
 
 }}} // namespace ppl::nn::riscv

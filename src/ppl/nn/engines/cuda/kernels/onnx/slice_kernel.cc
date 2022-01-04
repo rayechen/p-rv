@@ -18,7 +18,6 @@
 #include "ppl/nn/engines/cuda/kernels/onnx/slice_kernel.h"
 
 #include "cudakernel/memory/slice.h"
-
 namespace ppl { namespace nn { namespace cuda {
 
 ppl::common::RetCode SliceKernel::DoExecute(KernelExecContext* ctx) {
@@ -26,7 +25,7 @@ ppl::common::RetCode SliceKernel::DoExecute(KernelExecContext* ctx) {
     auto output = ctx->GetOutput<TensorImpl>(0);
     SliceKernelParam kernel_param;
 
-    const TensorShape& in_shape0 = ctx->GetInput<TensorImpl>(0)->GetShape();
+    const TensorShape& in_shape0 = *ctx->GetInput<TensorImpl>(0)->GetShape();
     int dim_count = in_shape0.GetDimCount();
     int input_count = ctx->GetInputCount();
     { // starts
@@ -52,7 +51,7 @@ ppl::common::RetCode SliceKernel::DoExecute(KernelExecContext* ctx) {
             LOG(ERROR) << "Copy axes failed: " << ppl::common::GetRetCodeStr(status);
             return status;
         }
-        kernel_param.axes_num = input->GetShape().GetElementsIncludingPadding();
+        kernel_param.axes_num = input->GetShape()->GetElementsIncludingPadding();
     } else {
         for (int it = 0; it < dim_count; ++it) {
             kernel_param.axes[it] = it;
@@ -71,7 +70,6 @@ ppl::common::RetCode SliceKernel::DoExecute(KernelExecContext* ctx) {
             kernel_param.steps[it] = 1;
         }
     }
-
     for (int it = 0; it < kernel_param.axes_num; ++it) {
         int64_t axis = kernel_param.axes[it];
         int64_t start_val = kernel_param.starts[it];
@@ -103,11 +101,11 @@ ppl::common::RetCode SliceKernel::DoExecute(KernelExecContext* ctx) {
 
     ppl::common::RetCode status = ppl::common::RC_SUCCESS;
     if (input->GetEdge()->CalcConsumerCount() == 1 && input->GetType() == TENSORTYPE_NORMAL &&
-        input->GetShape().GetElementsIncludingPadding() == output->GetShape().GetElementsIncludingPadding()) {
+        input->GetShape()->GetElementsIncludingPadding() == output->GetShape()->GetElementsIncludingPadding()) {
         output->TransferBufferFrom(input);
     } else {
-        status = PPLCUDASliceForwardImp(GetStream(), kernel_param, &input->GetShape(), input->GetBufferPtr(),
-                                        &output->GetShape(), output->GetBufferPtr());
+        status = PPLCUDASliceForwardImp(GetStream(), kernel_param, input->GetShape(), input->GetBufferPtr(),
+                                        output->GetShape(), output->GetBufferPtr());
     }
 
     return status;

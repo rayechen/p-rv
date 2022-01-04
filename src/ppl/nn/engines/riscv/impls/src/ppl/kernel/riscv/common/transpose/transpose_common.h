@@ -25,11 +25,7 @@
 namespace ppl { namespace kernel { namespace riscv {
 
 template <typename T>
-ppl::common::RetCode transpose2d_ndarray(
-    const T *src,
-    T *dst,
-    const ppl::nn::TensorShape *src_shape) {
-
+ppl::common::RetCode transpose2d_ndarray(const T* src, T* dst, const ppl::nn::TensorShape* src_shape) {
     const int32_t src_h = src_shape->GetDim(0);
     const int32_t src_w = src_shape->GetDim(1);
 
@@ -42,13 +38,9 @@ ppl::common::RetCode transpose2d_ndarray(
 }
 
 template <typename T>
-ppl::common::RetCode transpose3d_ndarray(
-    const T *src,
-    T *dst,
+ppl::common::RetCode transpose3d_ndarray(const T* src, T* dst,
 
-    const int32_t *perm,
-    const ppl::nn::TensorShape *src_shape) {
-
+                                         const int32_t* perm, const ppl::nn::TensorShape* src_shape) {
     const int32_t channels = src_shape->GetDim(0);
     const int32_t src_h = src_shape->GetDim(1);
     const int32_t src_w = src_shape->GetDim(2);
@@ -72,8 +64,8 @@ ppl::common::RetCode transpose3d_ndarray(
             int64_t height_in_offset = h * src_stride[1];
             int64_t height_out_offset = h * axis_stride[1];
             for (int32_t w = 0; w < src_w; ++w) {
-                dst[channels_out_offset + height_out_offset + w * axis_stride[2]]
-                    = src[channels_in_offset + height_in_offset + w * 1];
+                dst[channels_out_offset + height_out_offset + w * axis_stride[2]] =
+                    src[channels_in_offset + height_in_offset + w * 1];
             }
         }
     }
@@ -81,13 +73,9 @@ ppl::common::RetCode transpose3d_ndarray(
 }
 
 template <typename T>
-ppl::common::RetCode transpose4d_ndarray(
-    const T *src,
-    T *dst,
+ppl::common::RetCode transpose4d_ndarray(const T* src, T* dst,
 
-    const int32_t *perm,
-    const ppl::nn::TensorShape *src_shape) {
-
+                                         const int32_t* perm, const ppl::nn::TensorShape* src_shape) {
     const int32_t batch = src_shape->GetDim(0);
     const int32_t channels = src_shape->GetDim(1);
     const int32_t src_h = src_shape->GetDim(2);
@@ -100,7 +88,8 @@ ppl::common::RetCode transpose4d_ndarray(
     int32_t dst_src_w = src_dims[perm[3]];
 
     int64_t src_stride[4] = {int64_t(channels) * src_h * src_w, int64_t(src_h) * src_w, src_w, 1};
-    int64_t dst_stride[4] = {int64_t(dst_channels) * dst_src_h * dst_src_w, int64_t(dst_src_h) * dst_src_w, dst_src_w, 1};
+    int64_t dst_stride[4] = {int64_t(dst_channels) * dst_src_h * dst_src_w, int64_t(dst_src_h) * dst_src_w, dst_src_w,
+                             1};
     int64_t axis_stride[4];
     for (int32_t i = 0; i < 4; ++i) {
         axis_stride[perm[i]] = dst_stride[i];
@@ -127,19 +116,11 @@ ppl::common::RetCode transpose4d_ndarray(
 }
 
 template <typename T>
-void transpose_ndarray_recursive(
-    const int64_t *src_dims,
-    const int64_t *src_stride,
-    const int64_t *dst_stride,
-    const int32_t *perm,
-    const uint32_t dim_idx,
-    const uint32_t dim_count,
-    const int64_t base_in_offset,
-    const int64_t base_out_offset,
+void transpose_ndarray_recursive(const int64_t* src_dims, const int64_t* src_stride, const int64_t* dst_stride,
+                                 const int32_t* perm, const uint32_t dim_idx, const uint32_t dim_count,
+                                 const int64_t base_in_offset, const int64_t base_out_offset,
 
-    const T *src,
-    T *dst) {
-
+                                 const T* src, T* dst) {
     const int64_t length = src_dims[dim_idx];
     if (dim_idx == dim_count - 1) {
         for (int64_t i = 0; i < length; i++) {
@@ -147,22 +128,19 @@ void transpose_ndarray_recursive(
         }
     } else {
         for (int64_t i = 0; i < length; i++) {
-            transpose_ndarray_recursive<T>(src_dims, src_stride, dst_stride, perm, dim_idx, dim_count, base_in_offset, base_out_offset, src, dst);
+            transpose_ndarray_recursive<T>(src_dims, src_stride, dst_stride, perm, dim_idx, dim_count, base_in_offset,
+                                           base_out_offset, src, dst);
         }
     }
 }
 
 template <typename T>
-ppl::common::RetCode transpose_ndarray(
-    const T *src,
-    T *dst,
+ppl::common::RetCode transpose_ndarray(const T* src, T* dst,
 
-    const int32_t *perm,
-    const ppl::nn::TensorShape *src_shape,
-    const ppl::nn::TensorShape *dst_shape) {
-
+                                       const int32_t* perm, const ppl::nn::TensorShape* src_shape,
+                                       const ppl::nn::TensorShape* dst_shape) {
     const uint32_t dim_count = src_shape->GetDimCount();
-    
+
     if (dim_count > PPL_RISCV_TENSOR_MAX_DIMS()) {
         return ppl::common::RC_UNSUPPORTED;
     }
@@ -202,14 +180,10 @@ ppl::common::RetCode transpose_ndarray(
 }
 
 template <typename T>
-ppl::common::RetCode transpose_ndarray_continous2d(
-    const T *src,
-    T *dst,
+ppl::common::RetCode transpose_ndarray_continous2d(const T* src, T* dst,
 
-    const ppl::nn::TensorShape *src_shape,
-    const uint32_t axis0,
-    const uint32_t axis1) {
-
+                                                   const ppl::nn::TensorShape* src_shape, const uint32_t axis0,
+                                                   const uint32_t axis1) {
     const uint32_t dim_count = src_shape->GetDimCount();
     const int64_t dim0 = src_shape->GetDim(axis0);
     const int64_t dim1 = src_shape->GetDim(axis1);
@@ -227,8 +201,8 @@ ppl::common::RetCode transpose_ndarray_continous2d(
     for (int64_t od = 0; od < outer_dims; od++) {
         for (int64_t d0 = 0; d0 < dim0; d0++) {
             for (int64_t d1 = 0; d1 < dim1; d1++) {
-                const T *src_ = src + od * dim0 * dim1 * inner_dims + d0 * dim1 * inner_dims + d1 * inner_dims;
-                T *dst_       = dst + od * dim1 * dim0 * inner_dims + d1 * dim0 * inner_dims + d0 * inner_dims;
+                const T* src_ = src + od * dim0 * dim1 * inner_dims + d0 * dim1 * inner_dims + d1 * inner_dims;
+                T* dst_ = dst + od * dim1 * dim0 * inner_dims + d1 * dim0 * inner_dims + d0 * inner_dims;
                 memcpy(dst_, src_, inner_dims * sizeof(T));
             }
         }
@@ -237,6 +211,6 @@ ppl::common::RetCode transpose_ndarray_continous2d(
     return ppl::common::RC_SUCCESS;
 }
 
-}}};    //  namespace ppl::kernel::riscv
+}}}; //  namespace ppl::kernel::riscv
 
-#endif  //  __ST_PPL_KERNEL_RISCV_COMMON_TRANSPOSE_TRANSPOSE_COMMON_H_
+#endif //  __ST_PPL_KERNEL_RISCV_COMMON_TRANSPOSE_TRANSPOSE_COMMON_H_

@@ -24,7 +24,7 @@ namespace ppl { namespace nn { namespace x86 {
 
 bool ClipKernel::CanDoExecute(const KernelExecContext& ctx) const {
     auto tensor = ctx.GetInput<TensorImpl>(0);
-    if (!tensor || tensor->GetShape().GetBytesIncludingPadding() == 0) {
+    if (!tensor || tensor->GetShape()->GetBytesIncludingPadding() == 0) {
         return false;
     }
     return true;
@@ -36,7 +36,7 @@ ppl::common::RetCode ClipKernel::DoExecute(KernelExecContext* ctx) {
     PPLNN_X86_OPTIONAL_INPUT(max_tensor, 2);
     PPLNN_X86_REQUIRED_OUTPUT(output, 0);
 
-    const auto data_type = input->GetShape().GetDataType();
+    const auto data_type = input->GetShape()->GetDataType();
     if (data_type != ppl::common::DATATYPE_FLOAT32) {
         LOG(ERROR) << "only support fp32 now.";
         return ppl::common::RC_UNSUPPORTED;
@@ -44,35 +44,35 @@ ppl::common::RetCode ClipKernel::DoExecute(KernelExecContext* ctx) {
 
     float min_val = -FLT_MAX;
     float max_val = FLT_MAX;
-    if (min_tensor) {
-        min_val = (min_tensor->GetBufferPtr<float>())[0];
-    }
-    if (max_tensor) {
-        max_val = (max_tensor->GetBufferPtr<float>())[0];
-    }
 
     PPLNN_X86_DEBUG_TRACE("Op: %s\n", GetName().c_str());
+
     PPLNN_X86_DEBUG_TRACE("Input [input]:\n");
     PPL_X86_TENSOR_PRINT_DEBUG_MSG(input);
     if (min_tensor) {
+        min_val = (min_tensor->GetBufferPtr<float>())[0];
         PPLNN_X86_DEBUG_TRACE("Input [min]:\n");
         PPL_X86_TENSOR_PRINT_DEBUG_MSG(min_tensor);
     }
     if (max_tensor) {
+        max_val = (max_tensor->GetBufferPtr<float>())[0];
         PPLNN_X86_DEBUG_TRACE("Input [max]:\n");
         PPL_X86_TENSOR_PRINT_DEBUG_MSG(max_tensor);
     }
-    PPLNN_X86_DEBUG_TRACE("Output [output]:\n");
-    PPL_X86_TENSOR_PRINT_DEBUG_MSG(output);
+
     PPLNN_X86_DEBUG_TRACE("min_val: %f\n", min_val);
     PPLNN_X86_DEBUG_TRACE("max_val: %f\n", max_val);
     PPLNN_X86_DEBUG_TRACE("isa: %u\n", GetISA());
 
+    PPLNN_X86_REALLOC_TENSOR_BUFFER(output);
+    PPLNN_X86_DEBUG_TRACE("Output [output]:\n");
+    PPL_X86_TENSOR_PRINT_DEBUG_MSG(output);
+
     if (MayUseISA(ppl::common::ISA_X86_AVX)) {
-        return ppl::kernel::x86::clip_fp32_avx(&input->GetShape(), input->GetBufferPtr<float>(), min_val, max_val,
+        return ppl::kernel::x86::clip_fp32_avx(input->GetShape(), input->GetBufferPtr<float>(), min_val, max_val,
                                                output->GetBufferPtr<float>());
     } else if (MayUseISA(ppl::common::ISA_X86_SSE)) {
-        return ppl::kernel::x86::clip_fp32_sse(&input->GetShape(), input->GetBufferPtr<float>(), min_val, max_val,
+        return ppl::kernel::x86::clip_fp32_sse(input->GetShape(), input->GetBufferPtr<float>(), min_val, max_val,
                                                output->GetBufferPtr<float>());
     } else {
         LOG(ERROR) << "get unsupported isa " << GetISA();

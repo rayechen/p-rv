@@ -21,8 +21,6 @@
 #include <functional>
 #include <chrono>
 
-// #include "ppl/nn/common/tensor_shape.h"
-// #include "ppl/common/retcode.h"
 #include "ppl/nn/engines/riscv/riscv_common_param.h"
 #include "ppl/nn/runtime/opt_kernel.h"
 #include "ppl/nn/runtime/kernel_impl.h"
@@ -31,23 +29,25 @@
 
 namespace ppl { namespace nn { namespace riscv {
 
-class RISCVKernel : public KernelImpl {
+class RiscvKernel : public KernelImpl {
 public:
-    RISCVKernel(const ir::Node* node) : KernelImpl(node) {
-        LOG(INFO) << node->GetType().name << " " << GetName();
+    RiscvKernel(const ir::Node* node) : KernelImpl(node) {
+        LOG(DEBUG) << node->GetType().name << " " << GetName();
     }
-    RISCVKernel(RISCVKernel&&) = default;
+    RiscvKernel(RiscvKernel&&) = default;
     ppl::common::RetCode Execute(KernelExecContext* ctx) override;
 
     ppl::common::RetCode Reshape(KernelExecContext* ctx) const {
         return reshape_func_(ctx);
     }
 
-    void SetReshapeFunc(const std::function<ppl::common::RetCode (InputOutputInfo*)>& f) {
+    void SetReshapeFunc(const std::function<ppl::common::RetCode(InputOutputInfo*)>& f) {
         reshape_func_ = f;
     }
 
-    void SetCommonParam(const RISCVCommonParam* p) { common_param_ = p; }
+    void SetCommonParam(const RiscvCommonParam* p) {
+        common_param_ = p;
+    }
 
 #ifdef PPLNN_ENABLE_KERNEL_PROFILING
 public:
@@ -63,25 +63,24 @@ private:
 
 protected:
     virtual bool CanDoExecute(const KernelExecContext&) const;
-    
+
     virtual ppl::common::RetCode DoExecute(KernelExecContext*) = 0;
     virtual uint64_t CalcTmpBufferSize(const KernelExecContext& ctx) const {
         return 0;
     }
 
-    RISCVDevice* GetRISCVDevice() {
-        return reinterpret_cast<RISCVDevice*>(GetDevice());
+    RiscvDevice* GetRiscvDevice() {
+        return reinterpret_cast<RiscvDevice*>(GetDevice());
     }
-    const RISCVDevice* GetRISCVDevice() const {
-        return reinterpret_cast<const RISCVDevice*>(GetDevice());
+    const RiscvDevice* GetRiscvDevice() const {
+        return reinterpret_cast<const RiscvDevice*>(GetDevice());
     }
-
 
 private:
     ppl::common::RetCode BeforeExecute(KernelExecContext*);
 
-    const RISCVCommonParam* common_param_ = nullptr;
-    std::function<ppl::common::RetCode (InputOutputInfo*)> reshape_func_;
+    const RiscvCommonParam* common_param_ = nullptr;
+    std::function<ppl::common::RetCode(InputOutputInfo*)> reshape_func_;
 };
 
 }}} // namespace ppl::nn::riscv

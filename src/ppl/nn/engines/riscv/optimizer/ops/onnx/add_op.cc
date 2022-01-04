@@ -35,21 +35,25 @@ RetCode AddOp::Init(const OptKernelOptions& options) {
 
 RetCode AddOp::SelectFormat(const InputOutputInfo& info, vector<dataformat_t>* selected_input_formats,
                             vector<dataformat_t>* selected_output_formats) {
-    if (selected_input_formats->at(0) == DATAFORMAT_N8CX) {
+    if (DATAFORMAT_N8CX == selected_input_formats->at(0)) {
         selected_input_formats->at(1) = DATAFORMAT_N8CX;
         selected_output_formats->at(0) = DATAFORMAT_N8CX;
+    } else if (DATAFORMAT_N4CX == selected_input_formats->at(0)) {
+        selected_input_formats->at(1) = DATAFORMAT_N4CX;
+        selected_output_formats->at(0) = DATAFORMAT_N4CX;
     }
 
     return RC_SUCCESS;
 }
 
-RetCode AddOp::SelectDataType(const InputOutputInfo& info,
-                              std::vector<datatype_t>* selected_input_data_types,
+RetCode AddOp::SelectDataType(const InputOutputInfo& info, std::vector<datatype_t>* selected_input_data_types,
                               std::vector<datatype_t>* selected_output_data_types) {
-    
-    if (selected_input_data_types->at(0) == DATATYPE_FLOAT16) {
+    if (DATATYPE_FLOAT16 == selected_input_data_types->at(0)) {
         selected_input_data_types->at(1) = DATATYPE_FLOAT16;
         selected_output_data_types->at(0) = DATATYPE_FLOAT16;
+    } else if (DATATYPE_FLOAT32 == selected_input_data_types->at(0)) {
+        selected_input_data_types->at(1) = DATATYPE_FLOAT32;
+        selected_output_data_types->at(0) = DATATYPE_FLOAT32;
     }
 
     return RC_SUCCESS;

@@ -22,22 +22,31 @@ using namespace ppl::common;
 
 namespace ppl { namespace nn {
 
+RetCode TensorImpl::ReallocBuffer() {
+    if (!buffer_info_.IsBufferOwner() && buffer_info_.GetBufferPtr()) {
+        LOG(WARNING) << "tensor[" << GetName() << "] is not the buffer owner. ReallocBuffer() does nothing.";
+        return RC_SUCCESS;
+    }
+
+    return buffer_info_.ReallocBuffer();
+}
+
 RetCode TensorImpl::CopyToHost(void* dst) const {
-    return buffer_info_.GetDevice()->CopyToHost(dst, buffer_info_.GetBufferDesc(), buffer_info_.GetShape());
+    return buffer_info_.GetDevice()->CopyToHost(dst, buffer_info_.GetBufferDesc(), *buffer_info_.GetShape());
 }
 
 RetCode TensorImpl::CopyFromHost(const void* src) {
-    return buffer_info_.GetDevice()->CopyFromHost(&buffer_info_.GetBufferDesc(), src, buffer_info_.GetShape());
+    return buffer_info_.GetDevice()->CopyFromHost(&buffer_info_.GetBufferDesc(), src, *buffer_info_.GetShape());
 }
 
 RetCode TensorImpl::ConvertToHost(void* dst, const TensorShape& dst_desc) const {
     auto converter = buffer_info_.GetDevice()->GetDataConverter();
-    return converter->ConvertToHost(dst, dst_desc, buffer_info_.GetBufferDesc(), buffer_info_.GetShape());
+    return converter->ConvertToHost(dst, dst_desc, buffer_info_.GetBufferDesc(), *buffer_info_.GetShape());
 }
 
 RetCode TensorImpl::ConvertFromHost(const void* src, const TensorShape& src_desc) {
     auto converter = buffer_info_.GetDevice()->GetDataConverter();
-    return converter->ConvertFromHost(&buffer_info_.GetBufferDesc(), buffer_info_.GetShape(), src, src_desc);
+    return converter->ConvertFromHost(&buffer_info_.GetBufferDesc(), *buffer_info_.GetShape(), src, src_desc);
 }
 
 }} // namespace ppl::nn

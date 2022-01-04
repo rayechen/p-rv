@@ -22,14 +22,11 @@
 
 namespace ppl { namespace nn { namespace riscv {
 
-class SigmoidOp final : public RISCVOptKernel {
+class SigmoidOp final : public RiscvOptKernel {
 public:
-    SigmoidOp(const ir::Node* node) : RISCVOptKernel(node) {}
+    SigmoidOp(const ir::Node* node) : RiscvOptKernel(node) {}
     ppl::common::RetCode Init(const OptKernelOptions& options) override;
     KernelImpl* CreateKernelImpl() const override;
-    ppl::common::RetCode SelectDataType(const InputOutputInfo& info,
-                                        std::vector<ppl::common::datatype_t>* selected_input_data_types,
-                                        std::vector<ppl::common::datatype_t>* selected_output_data_types) override;
 };
 
 }}} // namespace ppl::nn::riscv

@@ -37,21 +37,18 @@ RetCode SoftmaxOp::Init(const OptKernelOptions& options) {
 }
 
 RetCode SoftmaxOp::SelectFormat(const InputOutputInfo& info, vector<dataformat_t>* selected_input_formats,
-                            vector<dataformat_t>* selected_output_formats) {
-    if (DATAFORMAT_NDARRAY == selected_input_formats->at(0)) {
-        selected_output_formats->at(0) = DATAFORMAT_NDARRAY;
-    }
+                                vector<dataformat_t>* selected_output_formats) {
     selected_input_formats->at(0) = DATAFORMAT_NDARRAY;
     selected_output_formats->at(0) = DATAFORMAT_NDARRAY;
     return RC_SUCCESS;
 }
 
-RetCode SoftmaxOp::SelectDataType(const InputOutputInfo& info,
-                              std::vector<datatype_t>* selected_input_data_types,
-                              std::vector<datatype_t>* selected_output_data_types) {
-    
+RetCode SoftmaxOp::SelectDataType(const InputOutputInfo& info, std::vector<datatype_t>* selected_input_data_types,
+                                  std::vector<datatype_t>* selected_output_data_types) {
     if (DATATYPE_FLOAT16 == selected_input_data_types->at(0)) {
         selected_output_data_types->at(0) = DATATYPE_FLOAT16;
+    } else if (DATATYPE_FLOAT32 == selected_input_data_types->at(0)) {
+        selected_output_data_types->at(0) = DATATYPE_FLOAT32;
     }
 
     return RC_SUCCESS;

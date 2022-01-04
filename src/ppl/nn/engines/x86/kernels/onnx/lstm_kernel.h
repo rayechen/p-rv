@@ -27,18 +27,18 @@ namespace ppl { namespace nn { namespace x86 {
 class LSTMKernel : public X86Kernel {
 public:
     LSTMKernel(const ir::Node* node) : X86Kernel(node) {}
-    bool CanDoExecute(const KernelExecContext& ctx) const;
+    bool CanDoExecute(const KernelExecContext& ctx) const override;
 
     void SetParam(const ppl::nn::common::LSTMParam* p) {
         param_ = p;
         if (p->direction == ppl::nn::common::LSTMParam::DIR_FORWARD) {
-            direction_ = ppl::kernel::x86::rnn_direction::forward;
+            direction_ = ppl::kernel::x86::rnn_direction::FORWARD;
         }
         if (p->direction == ppl::nn::common::LSTMParam::DIR_REVERSE) {
-            direction_ = ppl::kernel::x86::rnn_direction::reverse;
+            direction_ = ppl::kernel::x86::rnn_direction::REVERSE;
         }
         if (p->direction == ppl::nn::common::LSTMParam::DIR_BIDIRECTIONAL) {
-            direction_ = ppl::kernel::x86::rnn_direction::bidirectional;
+            direction_ = ppl::kernel::x86::rnn_direction::BIDIRECTIONAL;
         }
     }
 

@@ -15,8 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef __ST_PPL_KERNEL_RISCV_FP32_CONV2D_GEMM_VEC128_CONV2D_ndarray_TILE_GEMM_FP32_VEC128_H_
-#define __ST_PPL_KERNEL_RISCV_FP32_CONV2D_GEMM_VEC128_CONV2D_ndarray_TILE_GEMM_FP32_VEC128_H_
+#ifndef __ST_PPL_KERNEL_RISCV_FP32_CONV2D_GEMM_VEC128_CONV2D_NDARRAY_TILE_GEMM_FP32_VEC128_H_
+#define __ST_PPL_KERNEL_RISCV_FP32_CONV2D_GEMM_VEC128_CONV2D_NDARRAY_TILE_GEMM_FP32_VEC128_H_
 
 #include <cstdint>
 #include "ppl/kernel/riscv/fp32/conv2d.h"
@@ -36,13 +36,11 @@ struct conv2d_ndarray_tile_gemm_fp32_vec128_tunning_param {
 class conv2d_ndarray_tile_gemm_fp32_runtime_executor final : public conv2d_runtime_executor<float> {
 public:
     conv2d_ndarray_tile_gemm_fp32_runtime_executor() {}
-    conv2d_ndarray_tile_gemm_fp32_runtime_executor(
-        const conv2d_common_param *conv_param,
-        const float *cvt_filter,
-        const float *bias,
-        conv2d_ndarray_tile_gemm_fp32_vec128_tunning_param tunning_param)
+    conv2d_ndarray_tile_gemm_fp32_runtime_executor(const conv2d_common_param* conv_param, const float* cvt_filter,
+                                                   const float* bias,
+                                                   conv2d_ndarray_tile_gemm_fp32_vec128_tunning_param tunning_param)
         : conv2d_runtime_executor<float>(conv_param, cvt_filter, bias), tunning_param_(tunning_param) {}
-    
+
     // calculate overall temp buffer size
     uint64_t cal_temp_buffer_size() override;
     // prepare runtime scheduling params if needed
@@ -60,15 +58,18 @@ private:
 class conv2d_ndarray_tile_gemm_fp32_offline_manager final : public conv2d_offline_manager<float> {
 public:
     conv2d_ndarray_tile_gemm_fp32_offline_manager() {}
-    conv2d_ndarray_tile_gemm_fp32_offline_manager(const conv2d_common_param &param, const conv2d_common_algo_info &algo_info, ppl::common::Allocator *allocator)
+    conv2d_ndarray_tile_gemm_fp32_offline_manager(const conv2d_common_param& param,
+                                                  const conv2d_common_algo_info& algo_info,
+                                                  ppl::common::Allocator* allocator)
         : conv2d_offline_manager<float>(param, algo_info, allocator) {}
     bool is_supported() override;
-    ppl::common::RetCode gen_cvt_weights(const float *filter, const float *bias) override;
+    ppl::common::RetCode gen_cvt_weights(const float* filter, const float* bias) override;
     ppl::common::RetCode fast_init_tunning_param() override;
-    ppl::common::RetCode pick_best_tunning_param(const float *src, const float *filter, float *dst,
-                                                 ppl::nn::TensorShape &src_shape, ppl::nn::TensorShape &dst_shape) override;
+    ppl::common::RetCode pick_best_tunning_param(const float* src, const float* filter, float* dst,
+                                                 ppl::nn::TensorShape& src_shape,
+                                                 ppl::nn::TensorShape& dst_shape) override;
 
-    conv2d_base_runtime_executor *gen_executor() override {
+    conv2d_base_runtime_executor* gen_executor() override {
         return new conv2d_ndarray_tile_gemm_fp32_runtime_executor(&param_, cvt_filter_, cvt_bias_, tunning_param_);
     }
 

@@ -38,27 +38,29 @@ ppl::common::RetCode NonMaxSuppressionKernel::DoExecute(KernelExecContext* ctx) 
     PPL_X86_TENSOR_PRINT_DEBUG_MSG(boxes);
     PPLNN_X86_DEBUG_TRACE("Input [scores]:\n");
     PPL_X86_TENSOR_PRINT_DEBUG_MSG(scores);
-    PPLNN_X86_DEBUG_TRACE("Output [output]:\n");
-    PPL_X86_TENSOR_PRINT_DEBUG_MSG(output);
     PPLNN_X86_DEBUG_TRACE("center_point_box: %d\n", param_->center_point_box);
     PPLNN_X86_DEBUG_TRACE("max_output_boxes_per_class: %ld\n", max_output_boxes_per_class);
     PPLNN_X86_DEBUG_TRACE("iou_threshold: %f\n", iou_threshold);
     PPLNN_X86_DEBUG_TRACE("score_threshold: %f\n", score_threshold);
     PPLNN_X86_DEBUG_TRACE("isa: %u\n", GetISA());
 
+    PPLNN_X86_REALLOC_TENSOR_BUFFER(output);
+    PPLNN_X86_DEBUG_TRACE("Output [output]:\n");
+    PPL_X86_TENSOR_PRINT_DEBUG_MSG(output);
+
     int64_t real_num_boxes_output = 0;
 
     auto ret = kernel::x86::nms_ndarray_fp32(boxes->GetBufferPtr<const float>(), scores->GetBufferPtr<const float>(),
-                                             boxes->GetShape().GetDim(1), boxes->GetShape().GetDim(0),
-                                             scores->GetShape().GetDim(1), param_->center_point_box != 0,
+                                             boxes->GetShape()->GetDim(1), boxes->GetShape()->GetDim(0),
+                                             scores->GetShape()->GetDim(1), param_->center_point_box != 0,
                                              max_output_boxes_per_class, iou_threshold, score_threshold,
                                              output->GetBufferPtr<int64_t>(), &real_num_boxes_output);
     if (ret != ppl::common::RC_SUCCESS) {
-        ctx->GetOutput<TensorImpl>(0)->GetShape().Reshape({0, 3});
+        ctx->GetOutput<TensorImpl>(0)->GetShape()->Reshape({0, 3});
         return ret;
     }
 
-    ctx->GetOutput<TensorImpl>(0)->GetShape().Reshape({real_num_boxes_output, 3});
+    ctx->GetOutput<TensorImpl>(0)->GetShape()->Reshape({real_num_boxes_output, 3});
     // TODO: this will cause output data shape changed according to result, but never exceed max output shape
     PPLNN_X86_DEBUG_TRACE("Output [output] after forward:\n");
     PPL_X86_TENSOR_PRINT_DEBUG_MSG(output);

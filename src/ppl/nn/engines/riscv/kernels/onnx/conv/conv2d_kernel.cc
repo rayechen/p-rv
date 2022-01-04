@@ -33,7 +33,6 @@ ppl::common::RetCode Conv2dKernel::DoExecute(KernelExecContext* ctx) {
     TensorImpl* X = ctx->GetInput<TensorImpl>(0);
     TensorImpl* Y = ctx->GetOutput<TensorImpl>(0);
 
-    // auto cur_executor = dynamic_cast<ppl::kernel::riscv::conv2d_runtime_executor<__fp16>*>(executor_);
     auto cur_executor = executor_;
     cur_executor->set_src_tensor(*X);
     cur_executor->set_dst_tensor(*Y);
@@ -45,26 +44,16 @@ ppl::common::RetCode Conv2dKernel::DoExecute(KernelExecContext* ctx) {
         return rc;
     }
 
-#if DUMP_CONV
-    fprintf(stderr, CASE_STRING_FMT() "\n", cur_executor->conv_param()->group, X->GetShape().GetDim(0),
-            cur_executor->conv_param()->channels, X->GetShape().GetDim(2), X->GetShape().GetDim(3),
-            cur_executor->conv_param()->num_output, Y->GetShape().GetDim(2), Y->GetShape().GetDim(3),
-            cur_executor->conv_param()->kernel_h, cur_executor->conv_param()->kernel_w,
-            cur_executor->conv_param()->stride_h, cur_executor->conv_param()->stride_w,
-            cur_executor->conv_param()->pad_h, cur_executor->conv_param()->pad_w,
-            cur_executor->conv_param()->dilation_h - 1, cur_executor->conv_param()->dilation_w - 1, GetName().c_str());
-#endif
-
     BufferDesc tmp_buffer_desc;
     auto tmp_buffer_size = CalcTmpBufferSize(*ctx);
-    auto status = GetRISCVDevice()->AllocTmpBuffer(tmp_buffer_size, &tmp_buffer_desc);
+    auto status = GetRiscvDevice()->AllocTmpBuffer(tmp_buffer_size, &tmp_buffer_desc);
     if (status != ppl::common::RC_SUCCESS) {
         LOG(ERROR) << "alloc tmp buffer size[" << tmp_buffer_size << "] for kernel[" << GetName()
                    << "] failed: " << ppl::common::GetRetCodeStr(status);
         return status;
     }
     BufferDescGuard __tmp_buffer_guard(&tmp_buffer_desc, [this](BufferDesc* buffer) -> void {
-        GetRISCVDevice()->FreeTmpBuffer(buffer);
+        GetRiscvDevice()->FreeTmpBuffer(buffer);
     });
     auto tmp_buffer = tmp_buffer_desc.addr;
     cur_executor->set_temp_buffer(tmp_buffer);
@@ -75,17 +64,17 @@ ppl::common::RetCode Conv2dKernel::DoExecute(KernelExecContext* ctx) {
         PPLNN_RISCV_DEBUG_TRACE("Output [Y]:\n");
         PPL_RISCV_TENSOR_PRINT_DEBUG_MSG(Y);
         PPLNN_RISCV_DEBUG_TRACE("kernel_shape: %ld %ld\n", cur_executor->conv_param()->kernel_h,
-                            cur_executor->conv_param()->kernel_w);
+                                cur_executor->conv_param()->kernel_w);
         PPLNN_RISCV_DEBUG_TRACE("dilations: %ld %ld\n", cur_executor->conv_param()->dilation_h,
-                            cur_executor->conv_param()->dilation_w);
+                                cur_executor->conv_param()->dilation_w);
         PPLNN_RISCV_DEBUG_TRACE("strides: %ld %ld\n", cur_executor->conv_param()->stride_h,
-                            cur_executor->conv_param()->stride_w);
-        PPLNN_RISCV_DEBUG_TRACE("pads: %ld %ld\n", cur_executor->conv_param()->pad_h, cur_executor->conv_param()->pad_w);
+                                cur_executor->conv_param()->stride_w);
+        PPLNN_RISCV_DEBUG_TRACE("pads: %ld %ld\n", cur_executor->conv_param()->pad_h,
+                                cur_executor->conv_param()->pad_w);
         PPLNN_RISCV_DEBUG_TRACE("group: %ld\n", cur_executor->conv_param()->group);
         PPLNN_RISCV_DEBUG_TRACE("channels: %ld\n", cur_executor->conv_param()->channels);
         PPLNN_RISCV_DEBUG_TRACE("num_output: %ld\n", cur_executor->conv_param()->num_output);
         PPLNN_RISCV_DEBUG_TRACE("buffer: %p\n", tmp_buffer);
-        // PPLNN_RISCV_DEBUG_TRACE("fuse_flag: %ld\n", cur_executor->conv_param()->fuse_flag);
     }
 
     rc = cur_executor->execute();

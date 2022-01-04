@@ -29,7 +29,7 @@ class fc_fp32_vec128_manager;
 class fc_fp32_vec128_executor final : public fc_executor<float> {
 public:
     fc_fp32_vec128_executor() {}
-    fc_fp32_vec128_executor(const fc_common_param *fc_param, const float *cvt_filter, const float *bias)
+    fc_fp32_vec128_executor(const fc_common_param* fc_param, const float* cvt_filter, const float* bias)
         : fc_executor<float>(fc_param, cvt_filter, bias) {}
     uint64_t cal_temp_buffer_size() override;
     ppl::common::RetCode prepare() override;
@@ -43,10 +43,10 @@ private:
 class fc_fp32_vec128_manager final : public fc_manager<float> {
 public:
     fc_fp32_vec128_manager() {}
-    fc_fp32_vec128_manager(const fc_common_param &param, ppl::common::Allocator *allocator)
+    fc_fp32_vec128_manager(const fc_common_param& param, ppl::common::Allocator* allocator)
         : fc_manager<float>(param, allocator) {}
-    ppl::common::RetCode gen_cvt_weights(const float *filter, const float *bias) override;
-    fc_executor<float> *gen_executor() override;
+    ppl::common::RetCode gen_cvt_weights(const float* filter, const float* bias) override;
+    fc_executor<float>* gen_executor() override;
 };
 
 }}}; // namespace ppl::kernel::riscv

@@ -45,22 +45,34 @@ RetCode SplitOp::Init(const OptKernelOptions& options) {
 }
 
 RetCode SplitOp::SelectFormat(const InputOutputInfo& info, vector<dataformat_t>* selected_input_formats,
-                            vector<dataformat_t>* selected_output_formats) {
-    selected_input_formats->at(0) = DATAFORMAT_N8CX;
-    for (int32_t i = 0; i < selected_output_formats->size(); i++) {
-        selected_output_formats->at(i) = DATAFORMAT_N8CX;
+                              vector<dataformat_t>* selected_output_formats) {
+    if (DATAFORMAT_N8CX == selected_input_formats->at(0)) {
+        for (int32_t i = 0; i < selected_output_formats->size(); i++) {
+            selected_output_formats->at(i) = DATAFORMAT_N8CX;
+        }
+    } else if (DATAFORMAT_N4CX == selected_input_formats->at(0)) {
+        for (int32_t i = 0; i < selected_output_formats->size(); i++) {
+            selected_output_formats->at(i) = DATAFORMAT_N4CX;
+        }
+    } else if (DATAFORMAT_NDARRAY == selected_input_formats->at(0)) {
+        for (int32_t i = 0; i < selected_output_formats->size(); i++) {
+            selected_output_formats->at(i) = DATAFORMAT_NDARRAY;
+        }
     }
 
     return RC_SUCCESS;
 }
 
-RetCode SplitOp::SelectDataType(const InputOutputInfo& info,
-                              std::vector<datatype_t>* selected_input_data_types,
-                              std::vector<datatype_t>* selected_output_data_types) {
-    
-    selected_input_data_types->at(0) = DATATYPE_FLOAT16;
-    for (int32_t i = 0; i < selected_output_data_types->size(); i++) {
-        selected_output_data_types->at(i) = DATATYPE_FLOAT16;
+RetCode SplitOp::SelectDataType(const InputOutputInfo& info, std::vector<datatype_t>* selected_input_data_types,
+                                std::vector<datatype_t>* selected_output_data_types) {
+    if (DATATYPE_FLOAT16 == selected_input_data_types->at(0)) {
+        for (int32_t i = 0; i < selected_output_data_types->size(); i++) {
+            selected_output_data_types->at(i) = DATATYPE_FLOAT16;
+        }
+    } else if (DATATYPE_FLOAT32 == selected_input_data_types->at(0)) {
+        for (int32_t i = 0; i < selected_output_data_types->size(); i++) {
+            selected_output_data_types->at(i) = DATATYPE_FLOAT32;
+        }
     }
 
     return RC_SUCCESS;

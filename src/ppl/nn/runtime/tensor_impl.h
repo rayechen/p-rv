@@ -43,6 +43,10 @@ public:
         return GetEdge()->GetName().c_str();
     }
 
+    DeviceContext* GetDeviceContext() const override {
+        return buffer_info_.GetDevice();
+    }
+
     tensortype_t GetType() const {
         return type_;
     }
@@ -76,13 +80,11 @@ public:
         return buffer_info_.DetachBuffer();
     }
 
-    void FreeBuffer() {
+    void FreeBuffer() override {
         buffer_info_.FreeBuffer();
     }
 
-    ppl::common::RetCode ReallocBuffer() override {
-        return buffer_info_.ReallocBuffer();
-    }
+    ppl::common::RetCode ReallocBuffer() override;
 
     void SetBufferPtr(void* ptr) override {
         buffer_info_.SetBuffer(BufferDesc(ptr));
@@ -104,10 +106,7 @@ public:
         return buffer_info_.GetBufferDesc();
     }
 
-    TensorShape& GetShape() override {
-        return buffer_info_.GetShape();
-    }
-    const TensorShape& GetShape() const override {
+    TensorShape* GetShape() const override {
         return buffer_info_.GetShape();
     }
 

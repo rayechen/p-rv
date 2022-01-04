@@ -26,22 +26,39 @@ ppl::common::RetCode ChannelShuffleKernel::DoExecute(KernelExecContext* ctx) {
     auto Y = ctx->GetOutput<TensorImpl>(0);
     int group_ = param_->group;
 
-    if (X->GetShape().GetDimCount() != 4 || Y->GetShape().GetDimCount() != 4) {
-        LOG(ERROR) << "incorrect input dimcount: " << X->GetShape().GetDimCount();
+    auto input_id0 = X->GetEdge()->GetId();
+    auto input_quant0 = GetCommonParam()->cuda_tensor_info->at(input_id0);
+    auto output_id0 = Y->GetEdge()->GetId();
+    auto output_quant0 = GetCommonParam()->cuda_tensor_info->at(output_id0);
+
+    if (X->GetShape()->GetDimCount() != 4 || Y->GetShape()->GetDimCount() != 4) {
+        LOG(ERROR) << "incorrect input dimcount: " << X->GetShape()->GetDimCount();
         return ppl::common::RC_UNSUPPORTED;
     }
-    if (X->GetShape().GetDim(1) % group_) {
+    if (X->GetShape()->GetDim(1) % group_) {
         LOG(ERROR) << "unsupported ChanneShuffle group: " << group_;
         return ppl::common::RC_UNSUPPORTED;
     }
 
-    auto Y_shape = Y->GetShape();
-    if(Y_shape.GetElementsExcludingPadding() < Y_shape.GetElementsIncludingPadding())
-        cudaMemset(Y->GetBufferPtr(), 0, Y_shape.GetBytesIncludingPadding());
+    if (ctx->GetOutputCount() == 1) {
+        auto Y_shape = Y->GetShape();
+        PPLCUDAChannelShuffleForwardImp(GetStream(), group_, X->GetShape(), X->GetBufferPtr(),
+                                                             Y->GetShape(), Y->GetBufferPtr(),
+                                                             input_quant0.scale[0], output_quant0.scale[0]);
+    }
 
-    PPLCUDAChannelShuffleForwardImp(GetStream(), group_, &X->GetShape(), X->GetBufferPtr(), &Y->GetShape(),
-                                    Y->GetBufferPtr());
-
+    if (ctx->GetOutputCount() == 2) {
+        auto X2 = ctx->GetInput<TensorImpl>(1);
+        auto Y2 = ctx->GetOutput<TensorImpl>(1);
+        auto input_id1 = X2->GetEdge()->GetId();
+        auto input_quant1 = GetCommonParam()->cuda_tensor_info->at(input_id1);
+        auto output_id1 = Y2->GetEdge()->GetId();
+        auto output_quant1 = GetCommonParam()->cuda_tensor_info->at(output_id1);
+        PPLCUDAFuseChannelShuffleForwardImp(GetStream(), group_, X->GetShape(), X->GetBufferPtr(), X2->GetBufferPtr(),
+                                                                 Y->GetShape(), Y->GetBufferPtr(), Y2->GetBufferPtr(),
+                                                                 input_quant0.scale[0], input_quant1.scale[0],
+                                                                 output_quant0.scale[0], output_quant1.scale[0]);
+    }
     return ppl::common::RC_SUCCESS;
 }
 

@@ -28,19 +28,21 @@ namespace ppl { namespace nn {
 
 class EngineImpl;
 
-struct RuntimeKernelInfo {
-    RuntimeKernelInfo() : engine(nullptr) {}
-    RuntimeKernelInfo(RuntimeKernelInfo&&) = default;
-    RuntimeKernelInfo& operator=(RuntimeKernelInfo&&) = default;
+struct RuntimeGraphInfo final {
+    struct Partition final {
+        // vs2019 requires these constructors
+        Partition() {}
+        Partition(Partition&&) = default;
+        Partition& operator=(Partition&&) = default;
+        Partition(const Partition&) = delete;
+        Partition& operator=(const Partition&) = delete;
 
-    EngineImpl* engine;
-    std::unique_ptr<OptKernel> op;
-};
-
-struct RuntimeGraphInfo {
+        EngineImpl* engine = nullptr;
+        std::vector<std::unique_ptr<OptKernel>> ops;
+        std::map<edgeid_t, RuntimeConstantInfo> constants;
+    };
     std::map<edgeid_t, TensorShape> shapes;
-    std::vector<std::pair<edgeid_t, RuntimeConstantInfo>> constants;
-    std::vector<RuntimeKernelInfo> kernels; // sorted topologically
+    std::vector<Partition> partitions;
 };
 
 }} // namespace ppl::nn

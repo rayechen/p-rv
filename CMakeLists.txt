@@ -12,6 +12,7 @@ option(PPLNN_INSTALL "install ppl headers and libs" ON)
 option(PPLNN_ENABLE_KERNEL_PROFILING "enable profiling for each kernel" OFF)
 option(PPLNN_ENABLE_PYTHON_API "enable python api support" OFF)
 option(PPLNN_ENABLE_LUA_API "enable lua api support" OFF)
+option(PPLNN_HOLD_DEPS "don't update dependencies" OFF)
 
 # --------------------------------------------------------------------------- #
 
@@ -29,9 +30,9 @@ set(PPLNN_LINK_DIRECTORIES)
 
 include(cmake/deps.cmake)
 include(cmake/protobuf.cmake)
+include(cmake/rapidjson.cmake)
 
-hpcc_populate_dep(rapidjson)
-hpcc_populate_dep(ppl.common)
+hpcc_populate_dep(pplcommon)
 
 # --------------------------------------------------------------------------- #
 
@@ -68,14 +69,6 @@ if(PPLNN_ENABLE_KERNEL_PROFILING)
     list(APPEND PPLNN_COMPILE_DEFINITIONS PPLNN_ENABLE_KERNEL_PROFILING)
 endif()
 
-if(PPLNN_ENABLE_PYTHON_API)
-    add_subdirectory(python)
-endif()
-
-if(PPLNN_ENABLE_LUA_API)
-    add_subdirectory(lua)
-endif()
-
 # --------------------------------------------------------------------------- #
 
 # engines
@@ -94,7 +87,13 @@ endif()
 
 # --------------------------------------------------------------------------- #
 
-# dependencies
+if(PPLNN_ENABLE_PYTHON_API)
+    add_subdirectory(python)
+endif()
+
+if(PPLNN_ENABLE_LUA_API)
+    add_subdirectory(lua)
+endif()
 
 add_library(pplnn_static STATIC ${PPLNN_SOURCES})
 target_include_directories(pplnn_static PUBLIC ${PPLNN_INCLUDE_DIRECTORIES})

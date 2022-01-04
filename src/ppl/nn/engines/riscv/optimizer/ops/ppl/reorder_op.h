@@ -22,13 +22,13 @@
 
 namespace ppl { namespace nn { namespace riscv {
 
-class ReorderOp final : public RISCVOptKernel {
+class ReorderOp final : public RiscvOptKernel {
 public:
-    ReorderOp(const ir::Node* node) : RISCVOptKernel(node) {}
+    ReorderOp(const ir::Node* node) : RiscvOptKernel(node) {}
     ppl::common::RetCode Init(const OptKernelOptions& options) override;
     KernelImpl* CreateKernelImpl() const override;
 };
 
-}}} // namespace ppl::nn::arm
+}}} // namespace ppl::nn::riscv
 
 #endif

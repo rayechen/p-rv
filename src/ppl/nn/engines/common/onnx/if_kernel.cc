@@ -68,7 +68,7 @@ static RetCode SetExtraInputs(const KernelExecContext& ctx, const vector<uint32_
             return RC_NOT_FOUND;
         }
 
-        dst->GetShape() = src->GetShape();
+        *dst->GetShape() = *src->GetShape();
 
         if (dst->GetDevice() == src->GetDevice()) {
             dst->SetBuffer(src->GetBufferDesc());
@@ -90,7 +90,7 @@ static RetCode SetOutputs(RuntimeImpl* subgraph, KernelExecContext* ctx, Device*
         auto src = subgraph->GetOutputTensorImpl(i);
         auto dst = ctx->GetOutput<TensorImpl>(i);
 
-        dst->GetShape() = src->GetShape();
+        *dst->GetShape() = *src->GetShape();
 
         // outputs are already synchronized by subgraph->Sync()
         auto status = utils::CopyTensorBuffer(*src, dst, tmp_cpu_device);
@@ -166,12 +166,6 @@ RetCode IfKernel::DoExecute(KernelExecContext* ctx) {
     status = subgraph->Run();
     if (status != RC_SUCCESS) {
         LOG(ERROR) << "if kernel[" << GetName() << "] Run() failed: " << GetRetCodeStr(status);
-        return status;
-    }
-
-    status = subgraph->Sync();
-    if (status != RC_SUCCESS) {
-        LOG(ERROR) << "sync if kernel[" << GetName() << "] failed: " << GetRetCodeStr(status);
         return status;
     }
 

@@ -22,15 +22,10 @@
 namespace ppl { namespace kernel { namespace riscv {
 
 template <reduce_op_type_t op>
-ppl::common::RetCode reduce_fp16(
-    const __fp16 *src,
-    __fp16 *dst,
+ppl::common::RetCode reduce_fp16(const __fp16* src, __fp16* dst,
 
-    const ppl::nn::TensorShape *src_shape,
-    const ppl::nn::TensorShape *dst_shape,
-    const int32_t *axes,
-    const int32_t num_axes) {
-
+                                 const ppl::nn::TensorShape* src_shape, const ppl::nn::TensorShape* dst_shape,
+                                 const int32_t* axes, const int32_t num_axes) {
     if (src_shape->GetElementsExcludingPadding() == dst_shape->GetElementsExcludingPadding()) {
         memcpy(dst, src, src_shape->GetBytesIncludingPadding());
         return ppl::common::RC_SUCCESS;
@@ -47,7 +42,7 @@ ppl::common::RetCode reduce_fp16(
 
     bool continous_reduce_axis = true;
     for (int64_t i = 0; i < num_axes - 1; i++) {
-        if(real_axes[i + 1] - real_axes[i] != 1) {
+        if (real_axes[i + 1] - real_axes[i] != 1) {
             continous_reduce_axis = false;
             break;
         }
@@ -55,7 +50,6 @@ ppl::common::RetCode reduce_fp16(
 
     if (src_shape->GetDataFormat() == ppl::common::DATAFORMAT_NDARRAY) {
         if (continous_reduce_axis) {
-            
         } else {
             return reduce_ndarray_fp16<op>(src, dst, src_shape, dst_shape, real_axes, num_axes);
         }
@@ -66,52 +60,32 @@ ppl::common::RetCode reduce_fp16(
     return ppl::common::RC_UNSUPPORTED;
 }
 
-ppl::common::RetCode reduce_max_fp16(
-    const __fp16 *src,
-    __fp16 *dst,
+ppl::common::RetCode reduce_max_fp16(const __fp16* src, __fp16* dst,
 
-    const ppl::nn::TensorShape *src_shape,
-    const ppl::nn::TensorShape *dst_shape,
-    const int32_t *axes,
-    const int32_t num_axes) {
-
+                                     const ppl::nn::TensorShape* src_shape, const ppl::nn::TensorShape* dst_shape,
+                                     const int32_t* axes, const int32_t num_axes) {
     return reduce_fp16<REDUCE_MAX>(src, dst, src_shape, dst_shape, axes, num_axes);
 }
 
-ppl::common::RetCode reduce_min_fp16(
-    const __fp16 *src,
-    __fp16 *dst,
+ppl::common::RetCode reduce_min_fp16(const __fp16* src, __fp16* dst,
 
-    const ppl::nn::TensorShape *src_shape,
-    const ppl::nn::TensorShape *dst_shape,
-    const int32_t *axes,
-    const int32_t num_axes) {
-
+                                     const ppl::nn::TensorShape* src_shape, const ppl::nn::TensorShape* dst_shape,
+                                     const int32_t* axes, const int32_t num_axes) {
     return reduce_fp16<REDUCE_MIN>(src, dst, src_shape, dst_shape, axes, num_axes);
 }
 
-ppl::common::RetCode reduce_mean_fp16(
-    const __fp16 *src,
-    __fp16 *dst,
+ppl::common::RetCode reduce_mean_fp16(const __fp16* src, __fp16* dst,
 
-    const ppl::nn::TensorShape *src_shape,
-    const ppl::nn::TensorShape *dst_shape,
-    const int32_t *axes,
-    const int32_t num_axes) {
-
+                                      const ppl::nn::TensorShape* src_shape, const ppl::nn::TensorShape* dst_shape,
+                                      const int32_t* axes, const int32_t num_axes) {
     return reduce_fp16<REDUCE_MEAN>(src, dst, src_shape, dst_shape, axes, num_axes);
 }
 
-ppl::common::RetCode reduce_sum_fp16(
-    const __fp16 *src,
-    __fp16 *dst,
+ppl::common::RetCode reduce_sum_fp16(const __fp16* src, __fp16* dst,
 
-    const ppl::nn::TensorShape *src_shape,
-    const ppl::nn::TensorShape *dst_shape,
-    const int32_t *axes,
-    const int32_t num_axes) {
-
+                                     const ppl::nn::TensorShape* src_shape, const ppl::nn::TensorShape* dst_shape,
+                                     const int32_t* axes, const int32_t num_axes) {
     return reduce_fp16<REDUCE_SUM>(src, dst, src_shape, dst_shape, axes, num_axes);
 }
 
-}}};    //  namespace ppl::kernel::riscv
+}}}; //  namespace ppl::kernel::riscv

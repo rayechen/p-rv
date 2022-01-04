@@ -6,7 +6,7 @@
 * [Git](https://git-scm.com/downloads) >= 2.7.0
 * [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit-archive) >= 10.2 (for CUDA)
 * [Python](https://www.python.org/downloads/) >= 3 (for CUDA and Python API support)
-* [Lua](https://www.lua.org/download.html) >= 5.4.0 (optional, for Lua API support)
+* [Lua](https://www.lua.org/download.html) >= 5.2.0 (optional, for Lua API support)
 
 ### Cloning Source Code
 
@@ -72,6 +72,26 @@ If you want to use specified CUDA toolkit version, please specify `CUDA_TOOLKIT_
 ./build.sh -DHPCC_USE_CUDA=ON -DCUDA_TOOLKIT_ROOT_DIR=/path/to/cuda-toolkit-root-dir
 ```
 
+We use runtime-compiling version by default. If you want to use static version (build all kernels in advance), please specify `PPLNN_ENABLE_CUDA_JIT` as following:
+
+```bash
+./build.sh -DHPCC_USE_CUDA=ON -DPPLNN_ENABLE_CUDA_JIT=OFF
+```
+### Building RISCV Engine
+
+#### AllWinner D1
+
+You need to download c906 toolchain package from [https://occ.t-head.cn/community/download?id=3913221581316624384](https://occ.t-head.cn/community/download?id=3913221581316624384).
+``` bash
+tar -xf riscv64-linux-x86_64-20210512.tar.gz
+export RISCV_ROOT_PATH=/path/to/riscv64-linux-x86_64-20210512
+```
+
+Build pplnn:
+```bash
+./build.sh -DHPCC_TOOLCHAIN_DIR=$RISCV_ROOT_PATH -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/riscv64-linux-gnu.cmake -DHPCC_USE_RISCV=ON -DPPLNN_ENABLE_KERNEL_PROFILING=ON -DPPLNN_ENABLE_PYTHON_API=OFF -DPPLNN_ENABLE_LUA_API=OFF -DCMAKE_INSTALL_PREFIX=pplnn-build/install
+```
+
 #### Windows
 
 Using vs2015 for example:
@@ -99,14 +119,14 @@ If you want to use a specified version of python, you can pass `PYTHON3_INCLUDE_
 Run the python demo with the following command:
 
 ```bash
-PYTHONPATH=./pplnn-build/install python3 ./tools/pplnn.py [--use-x86 | --use-cuda] --onnx-model tests/testdata/conv.onnx
+PYTHONPATH=./pplnn-build/install/lib python3 ./tools/pplnn.py [--use-x86 | --use-cuda] --onnx-model tests/testdata/conv.onnx
 ```
 
 or use both engines:
 
 ```bash
 cd ppl.nn
-PYTHONPATH=./pplnn-build/install python3 ./tools/pplnn.py --use-x86 --use-cuda --onnx-model tests/testdata/conv.onnx
+PYTHONPATH=./pplnn-build/install/lib python3 ./tools/pplnn.py --use-x86 --use-cuda --onnx-model tests/testdata/conv.onnx
 ```
 
 There is a python packaging configuration in [python/package](../../python/package). You can install pyppl using `pip`:
@@ -115,7 +135,7 @@ There is a python packaging configuration in [python/package](../../python/packa
 cd ppl.nn
 rm -rf /tmp/pyppl-package # remove old packages
 cp -r python/package /tmp/pyppl-package
-cp -r pplnn-build/install/pyppl/* /tmp/pyppl-package/pyppl # Copy .so files. See WARNING below.
+cp -r pplnn-build/install/lib/pyppl/* /tmp/pyppl-package/pyppl # Copy .so files. See WARNING below.
 cd /tmp/pyppl-package
 pip3 install .
 ```
@@ -142,7 +162,7 @@ Run the lua demo with the following commands:
 
 ```bash
 cd ppl.nn
-LUAPATH=./pplnn-build/install /path/to/your/lua-interpreter ./tools/pplnn.lua
+LUAPATH=./pplnn-build/install/lib /path/to/your/lua-interpreter ./tools/pplnn.lua
 ```
 
 Note that your lua interpreter should be compiled with options `MYCFLAGS="-DLUA_USE_DLOPEN -fPIC" MYLIBS=-ldl` to enable loading .so plugins.

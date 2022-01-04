@@ -20,6 +20,7 @@
 
 #include "ppl/common/retcode.h"
 #include "ppl/nn/common/tensor_shape.h"
+#include "ppl/nn/common/device_context.h"
 #include "ppl/nn/common/common.h"
 
 namespace ppl { namespace nn {
@@ -32,13 +33,13 @@ public:
     virtual const char* GetName() const = 0;
 
     /** @brief get tensor's shape */
-    virtual TensorShape& GetShape() = 0;
-
-    /** @brief get tensor's shape */
-    virtual const TensorShape& GetShape() const = 0;
+    virtual TensorShape* GetShape() const = 0;
 
     /** @brief rellocate a buffer according to its shape */
     virtual ppl::common::RetCode ReallocBuffer() = 0;
+
+    /** @brief free data buffer */
+    virtual void FreeBuffer() = 0;
 
     /**
        @brief copy tensor's data to `dst`, which points to a host memory
@@ -57,6 +58,9 @@ public:
 
     /** @brief convert tensor's data from `dst` with shape `dst_desc` */
     virtual ppl::common::RetCode ConvertFromHost(const void* src, const TensorShape& src_desc) = 0;
+
+    /** @brief get context of the underlying `Device` */
+    virtual DeviceContext* GetDeviceContext() const = 0;
 
     /**
        @brief set the underlying buffer ptr

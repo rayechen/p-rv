@@ -26,21 +26,22 @@ using namespace ppl::common;
 namespace ppl { namespace nn { namespace cuda {
 
 RetCode ClipOp::Init(const OptKernelOptions& options) {
-    infer_type_func_ = [this](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
+    infer_type_func_ = [](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
         ppl::common::RetCode status;
+        type = DATATYPE_FLOAT16;
         if (type == DATATYPE_UNKNOWN) {
             status = InferInheritedType(info);
         } else if (type == DATATYPE_INT8) {
-            status = CopyQuantType(info, quant);
+            status = UnifyToOutputQuant(info, quant);
         } else {
             status = InferDefaultType(info, type);
         }
         auto input1 = info->GetInput<TensorImpl>(1);
         if (input1 != nullptr)
-            input1->GetShape().SetDataType(DATATYPE_FLOAT32);
+            input1->GetShape()->SetDataType(DATATYPE_FLOAT32);
         auto input2 = info->GetInput<TensorImpl>(2);
         if (input2 != nullptr)
-            input2->GetShape().SetDataType(DATATYPE_FLOAT32);
+            input2->GetShape()->SetDataType(DATATYPE_FLOAT32);
         return status;
     };
 

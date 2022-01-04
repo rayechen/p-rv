@@ -23,11 +23,11 @@ namespace ppl { namespace nn { namespace x86 {
 uint64_t ConvTransposeKernel::CalcTmpBufferSize(const KernelExecContext& ctx) const {
     auto x = ctx.GetInput<TensorImpl>(0);
 
-    const int32_t batch = x->GetShape().GetDim(0);
-    const int32_t src_h = x->GetShape().GetDim(2);
-    const int32_t src_w = x->GetShape().GetDim(3);
-    const int32_t num_outputs = ctx.GetInput<TensorImpl>(1)->GetShape().GetDim(0);
-    const int32_t channels = x->GetShape().GetDim(1);
+    const int32_t batch = x->GetShape()->GetDim(0);
+    const int32_t src_h = x->GetShape()->GetDim(2);
+    const int32_t src_w = x->GetShape()->GetDim(3);
+    const int32_t num_outputs = ctx.GetInput<TensorImpl>(1)->GetShape()->GetDim(0);
+    const int32_t channels = x->GetShape()->GetDim(1);
 
     if (false) {
     }
@@ -54,26 +54,13 @@ uint64_t ConvTransposeKernel::CalcTmpBufferSize(const KernelExecContext& ctx) co
 }
 
 ppl::common::RetCode ConvTransposeKernel::DoExecute(KernelExecContext* ctx) {
-    BufferDesc tmp_buffer_desc;
-    auto tmp_buffer_size = CalcTmpBufferSize(*ctx);
-    auto status = GetX86Device()->AllocTmpBuffer(tmp_buffer_size, &tmp_buffer_desc);
-    if (status != ppl::common::RC_SUCCESS) {
-        LOG(ERROR) << "alloc tmp buffer size[" << tmp_buffer_size << "] for kernel[" << GetName()
-                   << "] failed: " << ppl::common::GetRetCodeStr(status);
-        return status;
-    }
-    BufferDescGuard __tmp_buffer_guard(&tmp_buffer_desc, [this](BufferDesc* buffer) -> void {
-        GetX86Device()->FreeTmpBuffer(buffer);
-    });
-    auto tmp_buffer = tmp_buffer_desc.addr;
-
     PPLNN_X86_REQUIRED_INPUT(X, 0);
     PPLNN_X86_REQUIRED_INPUT(W, 1);
     PPLNN_X86_OPTIONAL_INPUT(B, 2);
     PPLNN_X86_REQUIRED_OUTPUT(Y, 0);
     const float* b_data = nullptr;
 
-    int32_t num_output = W->GetShape().GetDim(1);
+    int32_t num_output = W->GetShape()->GetDim(1);
     if (B) {
         b_data = B->GetBufferPtr<float>();
     }
@@ -87,28 +74,41 @@ ppl::common::RetCode ConvTransposeKernel::DoExecute(KernelExecContext* ctx) {
         PPLNN_X86_DEBUG_TRACE("Input [B]:\n");
         PPL_X86_TENSOR_PRINT_DEBUG_MSG(B);
     }
-    PPLNN_X86_DEBUG_TRACE("Output [Y]:\n");
-    PPL_X86_TENSOR_PRINT_DEBUG_MSG(Y);
+
     PPLNN_X86_DEBUG_TRACE("kernel_shape: %d %d\n", param_->kernel_shape[0], param_->kernel_shape[1]);
     PPLNN_X86_DEBUG_TRACE("dilations: %d %d\n", param_->dilations[0], param_->dilations[1]);
     PPLNN_X86_DEBUG_TRACE("strides: %d %d\n", param_->strides[0], param_->strides[1]);
     PPLNN_X86_DEBUG_TRACE("pads: %d %d %d %d\n", param_->pads[0], param_->pads[1], param_->pads[2], param_->pads[3]);
     PPLNN_X86_DEBUG_TRACE("group: %ld\n", param_->group);
-    PPLNN_X86_DEBUG_TRACE("buffer: %p\n", tmp_buffer);
     PPLNN_X86_DEBUG_TRACE("isa: %u\n", GetISA());
 
-    const int32_t batch = X->GetShape().GetDim(0);
-    const int32_t channels = X->GetShape().GetDim(1);
-    const int32_t src_h = X->GetShape().GetDim(2);
-    const int32_t src_w = X->GetShape().GetDim(3);
-    const int32_t dst_h = Y->GetShape().GetDim(2);
-    const int32_t dst_w = Y->GetShape().GetDim(3);
+    const int32_t batch = X->GetShape()->GetDim(0);
+    const int32_t channels = X->GetShape()->GetDim(1);
+    const int32_t src_h = X->GetShape()->GetDim(2);
+    const int32_t src_w = X->GetShape()->GetDim(3);
+    const int32_t dst_h = Y->GetShape()->GetDim(2);
+    const int32_t dst_w = Y->GetShape()->GetDim(3);
 
-    memset(tmp_buffer, 0, CalcTmpBufferSize(*ctx));
-    memset(Y->GetBufferPtr<void>(), 0, Y->GetShape().GetBytesIncludingPadding());
+    PPLNN_X86_REALLOC_TENSOR_BUFFER(Y);
+    PPLNN_X86_DEBUG_TRACE("Output [Y]:\n");
+    PPL_X86_TENSOR_PRINT_DEBUG_MSG(Y);
 
-    const auto data_format = X->GetShape().GetDataFormat();
-    const auto data_type = X->GetShape().GetDataType();
+    BufferDesc tmp_buffer_desc;
+    auto tmp_buffer_size = CalcTmpBufferSize(*ctx);
+    auto status = GetX86Device()->AllocTmpBuffer(tmp_buffer_size, &tmp_buffer_desc);
+    if (status != ppl::common::RC_SUCCESS) {
+        LOG(ERROR) << "alloc tmp buffer size[" << tmp_buffer_size << "] for kernel[" << GetName()
+                   << "] failed: " << ppl::common::GetRetCodeStr(status);
+        return status;
+    }
+    BufferDescGuard __tmp_buffer_guard(&tmp_buffer_desc, [this](BufferDesc* buffer) -> void {
+        GetX86Device()->FreeTmpBuffer(buffer);
+    });
+    auto tmp_buffer = tmp_buffer_desc.addr;
+    PPLNN_X86_DEBUG_TRACE("buffer: %p\n", tmp_buffer);
+
+    const auto data_format = X->GetShape()->GetDataFormat();
+    const auto data_type = X->GetShape()->GetDataType();
 
     if (data_type == ppl::common::DATATYPE_FLOAT32) {
         if (data_format == ppl::common::DATAFORMAT_NDARRAY) {

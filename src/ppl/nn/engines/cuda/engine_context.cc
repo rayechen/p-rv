@@ -31,7 +31,6 @@ RetCode CudaEngineContext::Init(const CudaEngineOptions& options) {
         LOG(ERROR) << "init BufferedCudaDevice failed: " << GetRetCodeStr(status);
         return status;
     }
-
     return RC_SUCCESS;
 }
 

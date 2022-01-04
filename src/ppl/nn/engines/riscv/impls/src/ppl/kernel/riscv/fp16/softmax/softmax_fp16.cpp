@@ -1,3 +1,20 @@
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
 #include <cmath>
 #include <riscv-vector.h>
 
@@ -5,12 +22,8 @@
 
 namespace ppl { namespace kernel { namespace riscv {
 
-ppl::common::RetCode softmax_ndarray_fp16(
-    const ppl::nn::TensorShape *shape,
-    const int64_t axis,
-    const __fp16 *src,
-    __fp16 *dst) {
-
+ppl::common::RetCode softmax_ndarray_fp16(const ppl::nn::TensorShape* shape, const int64_t axis, const __fp16* src,
+                                          __fp16* dst) {
     int64_t outer_dim = 1;
     int64_t inner_dim = 1;
     for (int64_t i = 0; i < axis; i++) {
@@ -23,8 +36,8 @@ ppl::common::RetCode softmax_ndarray_fp16(
     const auto vl = vsetvli(8, RVV_E16, RVV_M1);
 
     for (int64_t i = 0; i < outer_dim; i++) {
-        const __fp16 *src_ = src + i * inner_dim;
-        __fp16 *dst_ = dst + i * inner_dim;
+        const __fp16* src_ = src + i * inner_dim;
+        __fp16* dst_ = dst + i * inner_dim;
         // find max
         float16xm1_t vfmax = vfmvvf_float16xm1(-__FLT_MAX__, vl);
         __fp16 fmax = (__fp16)(-__FLT_MAX__);
@@ -43,8 +56,8 @@ ppl::common::RetCode softmax_ndarray_fp16(
         vfmax = vfmvvf_float16xm1(fmax, vl);
         // src - max
         for (j = 0; j + 8 < inner_dim; j += 8) {
-            const __fp16 *src_p = src_ + j;
-            __fp16 *dst_p = dst_ + j;
+            const __fp16* src_p = src_ + j;
+            __fp16* dst_p = dst_ + j;
             vsev_float16xm1(dst_p, vfsubvv_float16xm1(vlev_float16xm1(src_p, vl), vfmax, vl), vl);
         }
         for (; j < inner_dim; j++) {
@@ -63,4 +76,4 @@ ppl::common::RetCode softmax_ndarray_fp16(
     return ppl::common::RC_SUCCESS;
 }
 
-}}};    //  namespace ppl::kernel::riscv
+}}}; //  namespace ppl::kernel::riscv

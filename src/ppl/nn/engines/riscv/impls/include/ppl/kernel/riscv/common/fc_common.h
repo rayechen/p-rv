@@ -22,7 +22,6 @@
 
 namespace ppl { namespace kernel { namespace riscv {
 
-
 }}}; // namespace ppl::kernel::riscv
 
 #endif
