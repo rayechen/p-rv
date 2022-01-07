@@ -34,7 +34,7 @@ jobs:
           #echo '::set-output name=jenkins_runnumber::$jenkins_runid'
           #echo '::set-output name=jenkins_runnumber2::${jenkins_runid}'
           #echo '::set-output name=jenkins_runnumber3::103'
-          cd ../../ && ./test_pplnn_on_servers.sh ${{ github.run_id }} ${{ github.actor }} riscv
+          cd ../../ && ./test_pplnn_on_one_server.sh ${{ github.run_id }} ${{ github.actor }} riscv
         id: testing
       
       - name: ifcancelled
