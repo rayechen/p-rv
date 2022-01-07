@@ -1,4 +1,4 @@
-name: PPL<All Platforms> Build && Quick Test
+name: PPL<Risc-v> Build && Quick Test
 
 on:
   #push:
